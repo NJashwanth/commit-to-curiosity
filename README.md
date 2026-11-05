@@ -9,6 +9,7 @@ I'm learning AI, and I'm building alongside it. Some days the project uses AI, s
 <!-- PROJECTS-START -->
 | Day | Project | Tech | AI? | Summary |
 |-----|---------|------|-----|---------|
+| 001 | [weather-bot](day-001-weather-bot/) | Python, Open-Meteo, Claude API | Yes | Ask weather questions in plain English; Claude gives practical advice, or a clean emoji forecast without an API key. |
 <!-- PROJECTS-END -->
 
 ## How it works
