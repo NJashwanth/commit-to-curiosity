@@ -40,10 +40,10 @@ def _get(url, params):
         raise WeatherError("The weather service timed out. Try again in a moment.")
     except requests.exceptions.ConnectionError:
         raise WeatherError("Could not reach the weather service. Check your network connection.")
+    except ValueError:  # bad JSON; must come before RequestException, which it also subclasses
+        raise WeatherError("The weather service sent back something unreadable.")
     except requests.exceptions.RequestException as exc:
         raise WeatherError(f"The weather service returned an error: {exc}")
-    except ValueError:
-        raise WeatherError("The weather service sent back something unreadable.")
 
 
 def geocode(city):
@@ -56,9 +56,10 @@ def geocode(city):
     return {"name": label, "lat": r["latitude"], "lon": r["longitude"]}
 
 
-def fetch_forecast(lat, lon, units="imperial"):
+def build_forecast_params(lat, lon, units="imperial"):
+    """Pure function: the query parameters for the Open-Meteo forecast call."""
     imperial = units == "imperial"
-    params = {
+    return {
         "latitude": lat,
         "longitude": lon,
         "daily": ",".join([
@@ -73,7 +74,10 @@ def fetch_forecast(lat, lon, units="imperial"):
         "timezone": "auto",
         "forecast_days": 8,
     }
-    return _get(FORECAST_URL, params)
+
+
+def fetch_forecast(lat, lon, units="imperial"):
+    return _get(FORECAST_URL, build_forecast_params(lat, lon, units))
 
 
 def daily_rows(data):
