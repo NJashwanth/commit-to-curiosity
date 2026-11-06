@@ -10,7 +10,7 @@ I'm learning AI, and I'm building alongside it. Some days the project uses AI, s
 | Day | Project | Tech | AI? | Summary |
 |-----|---------|------|-----|---------|
 | 001 | [weather-bot](day-001-weather-bot/) | Python, Open-Meteo, Claude API | Yes | Ask weather questions in plain English; Claude gives practical advice, or a clean emoji forecast without an API key. |
-| 002 | [ask-my-repo](day-002-ask-my-repo/) | | | |
+| 002 | [ask-my-repo](day-002-ask-my-repo/) | Python, sentence-transformers, ChromaDB, Claude API | Yes | Ask questions about any GitHub repo; local embeddings retrieve the code, Claude answers with path:line citations, or you get the top chunks without a key. |
 <!-- PROJECTS-END -->
 
 ## How it works
