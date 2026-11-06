@@ -22,6 +22,13 @@ from retrieval import TOP_K, retrieve
 EXIT_WORDS = {"exit", "quit", ":q", "q"}
 
 
+def positive_int(value):
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be 1 or more")
+    return number
+
+
 def err(message):
     print(message, file=sys.stderr)
 
@@ -117,7 +124,7 @@ def build_parser():
         if name == "ask":
             p.add_argument("question")
         p.add_argument("--repo", help="indexed repo name (default: the most recently indexed)")
-        p.add_argument("-k", type=int, default=TOP_K, help=f"chunks to retrieve (default {TOP_K})")
+        p.add_argument("-k", type=positive_int, default=TOP_K, help=f"chunks to retrieve (default {TOP_K})")
         p.set_defaults(func=func)
     return parser
 

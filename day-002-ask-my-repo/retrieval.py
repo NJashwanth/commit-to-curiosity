@@ -21,7 +21,7 @@ class Hit:
 def retrieve(question, collection, embedder, k=TOP_K):
     """Top-k chunks for the question, most similar first. Empty list for an empty index."""
     total = collection.count()
-    if total == 0 or not question.strip():
+    if k < 1 or total == 0 or not question.strip():
         return []
     [vector] = embedder.embed([question])
     result = collection.query(

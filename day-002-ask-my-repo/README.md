@@ -379,7 +379,7 @@ python -m pytest                      # runs with coverage, config in pytest.ini
 python -m pytest --cov-fail-under=85  # what CI enforces
 ```
 
-No test touches the network or downloads a model. `git` is mocked, the embedder is replaced by deterministic fake vectors (or a fake `sentence_transformers` module), and the Claude client is a recording stub. ChromaDB itself runs for real in a temp folder. The suite covers file filtering, URL validation, the chunker (line ranges, overlap, empty and single-line files), the index (persistence, replacing on re-index), ranking by similarity, the prompt sent to Claude, fallback without a key and after a Claude failure, and the CLI (index, ask, chat exit, invalid URL, asking before indexing). Currently 156 tests at 100% coverage. GitHub Actions runs them on pushes that touch this folder (`.github/workflows/day-002-tests.yml`) and fails under 85%.
+No test touches the network or downloads a model. `git` is mocked, the embedder is replaced by deterministic fake vectors (or a fake `sentence_transformers` module), and the Claude client is a recording stub. ChromaDB itself runs for real in a temp folder. The suite covers file filtering, URL validation, the chunker (line ranges, overlap, empty and single-line files), the index (persistence, replacing on re-index), ranking by similarity, the prompt sent to Claude, fallback without a key and after a Claude failure, and the CLI (index, ask, chat exit, invalid URL, asking before indexing). Currently 240 tests at 100% coverage. GitHub Actions runs them on pushes that touch this folder (`.github/workflows/day-002-tests.yml`) and fails under 85%.
 
 ## What I learned
 
