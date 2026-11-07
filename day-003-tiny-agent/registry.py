@@ -3,6 +3,7 @@ import json
 
 import calculator
 import files
+import weather
 from errors import ToolError
 
 # name -> (schema, function). Adding a tool means adding one line here.
@@ -10,6 +11,8 @@ _TOOLS = {
     "calculator": (calculator.SCHEMA, calculator.calculate),
     "list_files": (files.LIST_FILES_SCHEMA, files.list_files),
     "read_file": (files.READ_FILE_SCHEMA, files.read_file),
+    "save_note": (files.SAVE_NOTE_SCHEMA, files.save_note),
+    "get_weather": (weather.SCHEMA, weather.get_weather),
 }
 
 

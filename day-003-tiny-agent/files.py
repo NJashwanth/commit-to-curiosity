@@ -1,10 +1,13 @@
-"""Sandboxed list_files and read_file tools. Everything stays inside workspace/."""
+"""Sandboxed list_files, read_file and save_note tools. Everything stays inside workspace/."""
+from datetime import datetime
 from pathlib import Path, PureWindowsPath
 
 from errors import ToolError
 
 WORKSPACE = Path(__file__).resolve().parent / "workspace"
 MAX_READ_CHARS = 20_000
+MAX_NOTE_CHARS = 2_000
+NOTES_FILE = "notes.md"
 
 LIST_FILES_SCHEMA = {
     "name": "list_files",
@@ -27,6 +30,16 @@ READ_FILE_SCHEMA = {
         "type": "object",
         "properties": {"path": {"type": "string", "description": "File path relative to workspace/."}},
         "required": ["path"],
+    },
+}
+
+SAVE_NOTE_SCHEMA = {
+    "name": "save_note",
+    "description": "Append a short note to workspace/notes.md, stamped with the current date and time.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"text": {"type": "string", "description": "The note to save (one or a few lines)."}},
+        "required": ["text"],
     },
 }
 
@@ -79,3 +92,19 @@ def read_file(path, root=None):
     if len(text) > MAX_READ_CHARS:
         return text[:MAX_READ_CHARS] + f"\n... [truncated, file has {len(text)} characters]"
     return text
+
+
+def save_note(text, root=None, now=None):
+    """Append a timestamped bullet to workspace/notes.md. The file is created if it is missing."""
+    if not isinstance(text, str) or not text.strip():
+        raise ToolError("Note text cannot be empty.")
+    text = " ".join(text.split())  # one line per note keeps the file tidy
+    if len(text) > MAX_NOTE_CHARS:
+        raise ToolError(f"Note is too long (limit {MAX_NOTE_CHARS} characters).")
+    target = resolve_in_workspace(NOTES_FILE, root)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    stamp = (now or datetime.now()).strftime("%Y-%m-%d %H:%M")
+    needs_newline = target.exists() and target.stat().st_size > 0 and not target.read_text(encoding="utf-8").endswith("\n")
+    with target.open("a", encoding="utf-8") as fh:
+        fh.write(("\n" if needs_newline else "") + f"- {stamp}: {text}\n")
+    return f"Saved note to {NOTES_FILE}."

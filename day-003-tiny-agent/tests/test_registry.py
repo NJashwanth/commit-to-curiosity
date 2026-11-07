@@ -46,3 +46,24 @@ def test_non_dict_input():
 def test_non_string_results_are_json_encoded(monkeypatch):
     monkeypatch.setitem(registry._TOOLS, "dict_tool", ({"name": "dict_tool"}, lambda: {"a": 1}))
     assert registry.execute_tool("dict_tool", {}) == '{"a": 1}'
+
+
+def test_all_five_tools_registered():
+    names = {s["name"] for s in registry.tool_schemas()}
+    assert names == {"calculator", "list_files", "read_file", "save_note", "get_weather"}
+
+
+def test_save_note_through_registry(tmp_path, monkeypatch):
+    import files
+
+    monkeypatch.setattr(files, "WORKSPACE", tmp_path)
+    assert registry.execute_tool("save_note", {"text": "via registry"}) == "Saved note to notes.md."
+    assert "via registry" in (tmp_path / "notes.md").read_text(encoding="utf-8")
+
+
+def test_get_weather_through_registry_returns_json(monkeypatch):
+    import weather
+
+    monkeypatch.setattr(weather, "get_weather", lambda city, units="imperial": {"city": city})
+    monkeypatch.setitem(registry._TOOLS, "get_weather", (weather.SCHEMA, weather.get_weather))
+    assert json.loads(registry.execute_tool("get_weather", {"city": "Oslo"})) == {"city": "Oslo"}
