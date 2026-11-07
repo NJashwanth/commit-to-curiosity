@@ -11,7 +11,7 @@ I'm learning AI, and I'm building alongside it. Some days the project uses AI, s
 |-----|---------|------|-----|---------|
 | 001 | [weather-bot](day-001-weather-bot/) | Python, Open-Meteo, Claude API | Yes | Ask weather questions in plain English; Claude gives practical advice, or a clean emoji forecast without an API key. |
 | 002 | [ask-my-repo](day-002-ask-my-repo/) | Python, sentence-transformers, ChromaDB, Claude API | Yes | Ask questions about any GitHub repo; local embeddings retrieve the code, Claude answers with path:line citations, or you get the top chunks without a key. |
-| 003 | [tiny-agent](day-003-tiny-agent/) | | | |
+| 003 | [tiny-agent](day-003-tiny-agent/) | Python, Anthropic tool use API, Open-Meteo | Yes | A from-scratch agent loop with no frameworks: Claude picks from 5 tools (calculator, weather, sandboxed files, notes), sees the results and repeats until it can answer, with step limits, retries and a `--trace` mode. |
 <!-- PROJECTS-END -->
 
 ## How it works
