@@ -1,0 +1,27 @@
+name: day-004-tests
+
+on:
+  push:
+    paths:
+      - "day-004-pubdev-mcp/**"
+      - ".github/workflows/day-004-tests.yml"
+  pull_request:
+    paths:
+      - "day-004-pubdev-mcp/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: day-004-pubdev-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: day-004-pubdev-mcp/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      # httpx is mocked in every test, so no network access is needed.
+      - run: python -m pytest --cov-fail-under=85
