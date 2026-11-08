@@ -35,6 +35,40 @@ async def package_score(name: str) -> dict[str, Any]:
     return await tools.package_score(_client, name)
 
 
+@mcp.tool()
+async def compare_packages(names: list[str]) -> dict[str, Any]:
+    """Compare 2 to 5 packages side by side (version, last publish, pub points, likes,
+    downloads, null safety, Dart 3, platforms) with a health verdict for each:
+    active, stale or discontinued."""
+    return await tools.compare_packages(_client, names)
+
+
+@mcp.tool()
+async def publisher_packages(publisher: str) -> dict[str, Any]:
+    """List the packages owned by a pub.dev verified publisher, for example 'dart.dev'
+    or 'jneela.dev', with latest version, description and last publish date."""
+    return await tools.publisher_packages(_client, publisher)
+
+
+@mcp.prompt()
+def pick_package(use_case: str) -> str:
+    """Guide Claude to search pub.dev, compare the best candidates and recommend one."""
+    return (
+        f"I need a Dart/Flutter package for: {use_case}\n\n"
+        "Use the pubdev tools to pick one:\n"
+        "1. Call search_packages with a few different phrasings of the use case "
+        "(limit 10) and shortlist the 3 to 5 strongest candidates by pub points, likes and downloads.\n"
+        "2. Call compare_packages on the shortlist. Drop anything stale or discontinued "
+        "unless it is the only option.\n"
+        "3. Call package_info and package_score on the top one or two to check SDK constraints, "
+        "platform support, the publisher, and null safety / Dart 3 compatibility.\n"
+        "4. Recommend one package. Give the reasons in a few bullets, name a runner-up, and say "
+        "when you would choose the runner-up instead. Mention any risk, such as a single "
+        "maintainer, an old last publish date or a missing platform.\n"
+        "Base every claim on the tool results, and say so if a tool returned an error."
+    )
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 
