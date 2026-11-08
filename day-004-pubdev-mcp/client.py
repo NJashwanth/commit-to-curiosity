@@ -126,3 +126,10 @@ class PubDevClient:
         return await self.get_json(
             f"/api/publishers/{quote(publisher)}", what=f"Publisher '{publisher}'"
         )
+
+    async def metrics(self, name: str) -> dict[str, Any]:
+        """Score plus the pana report (pub points breakdown)."""
+        name = normalize_package(name)
+        return await self.get_json(
+            f"/api/packages/{quote(name)}/metrics", what=f"Package '{name}'"
+        )
