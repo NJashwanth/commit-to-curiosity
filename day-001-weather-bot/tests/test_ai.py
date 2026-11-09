@@ -1,11 +1,14 @@
 import json
+from datetime import date
 
 import pytest
 import requests
 import responses
 
 import bot
-from ai import API_URL, DEFAULT_MODEL, build_prompt, ask_claude
+from ai import API_URL, DEFAULT_MODEL, SYSTEM_PROMPT, build_prompt, ask_claude
+from conftest import make_rows, to_api_daily
+from weather import FORECAST_URL
 
 CLAUDE_REPLY = {"content": [{"type": "text", "text": "Bring a light jacket. No umbrella needed."}]}
 
@@ -80,3 +83,25 @@ def test_claude_failure_falls_back_to_plain_forecast(forecast, mocked, monkeypat
     captured = capsys.readouterr()
     assert "📍 Detroit, Michigan, US" in captured.out
     assert "AI answer unavailable" in captured.err
+
+
+def test_hourly_data_reaches_claude(detroit, mocked, monkeypatch):
+    rows = make_rows(date.today())
+    api = to_api_daily(rows)
+    tomorrow = rows[1]["time"]
+    api["hourly"] = {"time": [f"{tomorrow}T07:00", f"{tomorrow}T15:00"],
+                     "temperature_2m": [38.0, 59.0], "precipitation_probability": [80, 5], "weather_code": [61, 1]}
+    detroit.add(responses.GET, FORECAST_URL, json=api)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    mocked.add(responses.POST, API_URL, json=CLAUDE_REPLY)
+    assert bot.main(["Do I need a jacket in Detroit tomorrow?"]) == 0
+    call = [c for c in mocked.calls if c.request.url == API_URL][0]
+    body = json.loads(call.request.body)
+    sent_rows = json.loads(body["messages"][0]["content"].split("Forecast (JSON): ", 1)[1])
+    assert sent_rows[0]["hourly"] == {"hour": [7, 15], "temperature_2m": [38.0, 59.0],
+                                      "precipitation_probability": [80, 5], "weather_code": [61, 1]}
+    assert "hourly" in body["system"]
+
+
+def test_system_prompt_points_claude_at_hourly_data():
+    assert "hourly" in SYSTEM_PROMPT and "WMO" in SYSTEM_PROMPT

@@ -3,6 +3,7 @@ import requests
 import responses
 
 from weather import (FORECAST_URL, GEOCODE_URL, WeatherError, build_forecast_params, daily_rows,
+                     hourly_by_day,
                      fetch_forecast, geocode)
 
 
@@ -76,3 +77,26 @@ def test_daily_rows_reshapes_columns():
     assert daily_rows(data) == [{"time": "2026-11-05", "weather_code": 0},
                                 {"time": "2026-11-06", "weather_code": 3}]
     assert daily_rows({}) == []
+
+
+HOURLY = {"hourly": {"time": ["2026-11-05T00:00", "2026-11-05T01:00", "2026-11-06T00:00"],
+                     "temperature_2m": [40.0, 39.5, 45.0], "precipitation_probability": [0, 5, 60],
+                     "weather_code": [0, 1, 61]}}
+
+
+def test_hourly_by_day_groups_columns_by_date():
+    assert hourly_by_day(HOURLY) == {
+        "2026-11-05": {"hour": [0, 1], "temperature_2m": [40.0, 39.5],
+                       "precipitation_probability": [0, 5], "weather_code": [0, 1]},
+        "2026-11-06": {"hour": [0], "temperature_2m": [45.0],
+                       "precipitation_probability": [60], "weather_code": [61]},
+    }
+    assert hourly_by_day({}) == {}
+
+
+def test_daily_rows_attach_matching_hourly_block():
+    data = {"daily": {"time": ["2026-11-05", "2026-11-06", "2026-11-07"], "weather_code": [0, 3, 2]}, **HOURLY}
+    rows = daily_rows(data)
+    assert rows[0]["hourly"]["hour"] == [0, 1]
+    assert rows[1]["hourly"]["weather_code"] == [61]
+    assert "hourly" not in rows[2]  # no hourly data for that day

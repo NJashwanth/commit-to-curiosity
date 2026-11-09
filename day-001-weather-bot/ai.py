@@ -10,8 +10,9 @@ API_URL = "https://api.anthropic.com/v1/messages"
 SYSTEM_PROMPT = (
     "You are a friendly, practical weather assistant. You get the user's question and raw forecast "
     "data. Answer in 2 to 4 short sentences: say what to wear, whether to bring an umbrella, and the "
-    "best time of day to be outside when relevant. Use the units given. Be specific, not generic. "
-    "No markdown headings, at most one emoji."
+    "best time of day to be outside when relevant. Each day has an 'hourly' block (hour 0-23, local "
+    "time); base any timing advice on it, not on guesses. weather_code values are WMO weather codes. "
+    "Use the units given. Be specific, not generic. No markdown headings, at most one emoji."
 )
 
 

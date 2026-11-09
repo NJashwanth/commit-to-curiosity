@@ -1,7 +1,9 @@
 """Open-Meteo helpers: geocoding, forecast fetching and plain-text formatting."""
-from datetime import date, timedelta
+from datetime import date
 
 import requests
+
+from qparse import timeframe_dates
 
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -80,33 +82,45 @@ def fetch_forecast(lat, lon, units="imperial"):
     return _get(FORECAST_URL, build_forecast_params(lat, lon, units))
 
 
+def hourly_by_day(data):
+    """Group Open-Meteo's hourly columns by date, keeping them column-oriented to stay compact:
+    {"2026-11-10": {"hour": [0, 1, ...], "temperature_2m": [...], ...}}"""
+    h = data.get("hourly") or {}
+    fields = [k for k in h if k != "time"]
+    out = {}
+    for i, stamp in enumerate(h.get("time") or []):
+        day, clock = stamp.split("T")
+        bucket = out.setdefault(day, {"hour": [], **{k: [] for k in fields}})
+        bucket["hour"].append(int(clock[:2]))
+        for k in fields:
+            bucket[k].append(h[k][i])
+    return out
+
+
 def daily_rows(data):
-    """Turn Open-Meteo's column-oriented daily block into a list of dicts."""
+    """Turn Open-Meteo's column-oriented daily block into a list of dicts, each with its hourly data."""
     d = data.get("daily") or {}
     days = d.get("time") or []
-    return [{k: v[i] for k, v in d.items()} for i in range(len(days))]
+    hourly = hourly_by_day(data)
+    rows = []
+    for i, day in enumerate(days):
+        row = {k: v[i] for k, v in d.items()}
+        if day in hourly:
+            row["hourly"] = hourly[day]
+        rows.append(row)
+    return rows
 
 
 def select_days(rows, timeframe, today=None):
-    """Pick the rows for a timeframe: today, tomorrow, weekend or week."""
-    today = today or date.today()
+    """Pick the rows for a time frame. `today` defaults to the forecast's first day, which Open-Meteo
+    gives in the city's own time zone (so "today" in Tokyo means Tokyo's today)."""
+    if today is None:
+        today = date.fromisoformat(rows[0]["time"]) if rows else date.today()
     by_date = {r["time"]: r for r in rows}
-    if timeframe == "today":
-        wanted = [today]
-    elif timeframe == "tomorrow":
-        wanted = [today + timedelta(days=1)]
-    elif timeframe == "weekend":
-        if today.weekday() == 6:  # Sunday: only Sunday is left
-            wanted = [today]
-        else:
-            sat = today + timedelta(days=(5 - today.weekday()) % 7)
-            wanted = [sat, sat + timedelta(days=1)]
-    else:  # week
-        wanted = [today + timedelta(days=i) for i in range(7)]
-    picked = [by_date[d.isoformat()] for d in wanted if d.isoformat() in by_date]
-    if not picked:
+    wanted = [d.isoformat() for d in timeframe_dates(timeframe, today)]
+    if not wanted or any(d not in by_date for d in wanted):
         raise WeatherError("The forecast doesn't cover that time frame (I only see about a week ahead).")
-    return picked
+    return [by_date[d] for d in wanted]
 
 
 def format_forecast(place, rows, units="imperial"):

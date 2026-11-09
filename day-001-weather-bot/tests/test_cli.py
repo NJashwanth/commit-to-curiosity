@@ -62,3 +62,21 @@ def test_network_failure_exits_1(mocked, capsys):
     mocked.add(responses.GET, GEOCODE_URL, body=requests.exceptions.ConnectionError())
     assert bot.main(["weather in Detroit"]) == 1
     assert "Could not reach" in capsys.readouterr().err
+
+
+def test_unparsed_time_prints_note_but_still_answers(forecast, capsys):
+    assert bot.main(["weather in Detroit in a few days"]) == 0
+    captured = capsys.readouterr()
+    assert "couldn't tell which day" in captured.err
+    assert "📍 Detroit, Michigan, US" in captured.out
+
+
+def test_no_note_when_no_time_mentioned(forecast, capsys):
+    assert bot.main(["weather in Detroit"]) == 0
+    assert "couldn't tell which day" not in capsys.readouterr().err
+
+
+def test_weekday_question_shows_that_day(forecast, capsys):
+    target = date.today() + timedelta(days=3)
+    assert bot.main([f"Will it rain in Detroit on {target.strftime('%A')}?"]) == 0
+    assert target.strftime("%a %b %d") in capsys.readouterr().out

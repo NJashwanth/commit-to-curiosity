@@ -12,7 +12,7 @@ import requests
 from dotenv import load_dotenv
 
 from ai import ask_claude
-from qparse import QuestionError, parse_question
+from qparse import QuestionError, parse_question, timeframe_was_guessed
 from weather import WeatherError, daily_rows, fetch_forecast, format_forecast, geocode, select_days
 
 
@@ -34,6 +34,9 @@ def main(argv=None):
     except QuestionError as exc:
         print(exc, file=sys.stderr)
         return 2
+    if timeframe_was_guessed(question):
+        print("(I couldn't tell which day you meant, so this is today's forecast. Try: tomorrow, Friday, "
+              "this weekend, in 3 days, next 5 days.)\n", file=sys.stderr)
 
     try:
         loc = geocode(city)

@@ -76,3 +76,27 @@ def test_today_tomorrow_week():
 def test_timeframe_outside_forecast_raises():
     with pytest.raises(WeatherError, match="doesn't cover"):
         select_days(ROWS, "today", date(2027, 1, 1))
+
+
+def test_weekday_and_n_day_frames():
+    assert [r["time"] for r in select_days(ROWS, "monday", THURSDAY)] == ["2026-11-09"]
+    assert [r["time"] for r in select_days(ROWS, "in 2 days", THURSDAY)] == ["2026-11-07"]
+    assert len(select_days(ROWS, "next 5 days", THURSDAY)) == 5
+
+
+def test_frame_past_forecast_end_raises_instead_of_truncating():
+    with pytest.raises(WeatherError, match="doesn't cover"):
+        select_days(ROWS, "next 14 days", THURSDAY)
+    with pytest.raises(WeatherError, match="doesn't cover"):
+        select_days(ROWS, "in 10 days", THURSDAY)
+
+
+def test_today_defaults_to_forecast_first_day():
+    """Open-Meteo starts the forecast at the city's local today, which may differ from ours."""
+    assert select_days(ROWS, "today")[0]["time"] == "2026-11-05"
+    assert select_days(ROWS, "tomorrow")[0]["time"] == "2026-11-06"
+
+
+def test_hourly_block_does_not_change_plain_output():
+    row = dict(ROWS[0], hourly={"hour": [0], "temperature_2m": [40.0]})
+    assert format_forecast("X", [row]) == format_forecast("X", ROWS[:1])
