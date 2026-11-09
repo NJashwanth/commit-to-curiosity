@@ -75,3 +75,6 @@ out/
 # --- Logs ---
 *.log
 logs/
+
+# --- generated eval receipts (python evals/generate.py) ---
+day-005-receipt-splitter/evals/receipts/
