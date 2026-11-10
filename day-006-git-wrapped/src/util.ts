@@ -72,3 +72,8 @@ const HTML_ESCAPES: Record<string, string> = {
 export function escapeHtml(value: unknown): string {
   return String(value).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 }
+
+/** Repo name safe to show or send anywhere: private repo names are never revealed. */
+export function repoLabel(repo: { nameWithOwner: string; isPrivate: boolean }): string {
+  return repo.isPrivate ? "a private repo" : repo.nameWithOwner;
+}

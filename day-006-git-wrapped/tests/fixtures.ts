@@ -61,3 +61,28 @@ export function stampsAt(hour: number, n: number, date = "2026-03-02"): string[]
   const hh = String(hour).padStart(2, "0");
   return Array.from({ length: n }, (_, i) => `${date}T${hh}:${String(i % 60).padStart(2, "0")}:00Z`);
 }
+
+import { computeStats } from "../src/stats";
+import type { Stats } from "../src/types";
+
+/** A busy, believable year: weekday-heavy, late-night commits, three languages. */
+export function sampleStats(overrides: Partial<Stats> = {}): Stats {
+  const counts = {
+    ...run("2026-02-02", 5, 4), // Mon to Fri
+    ...run("2026-03-09", 3, 2),
+    "2026-04-04": 12, // a Saturday, the busiest day
+    "2026-04-05": 2,
+  };
+  const stats = computeStats({
+    contributions: buildContributions(2026, counts, {
+      totals: { commits: 1234, pullRequests: 56, issues: 7, reviews: 89 },
+    }),
+    repos: [
+      repo("octo/engine", { TypeScript: 6000, CSS: 500 }, 40),
+      repo("octo/site", { TypeScript: 1000, HTML: 900, Python: 100 }, 2),
+    ],
+    commitTimestamps: [...stampsAt(21, 12), ...stampsAt(10, 4), ...stampsAt(15, 4)],
+    today: new Date("2026-12-31T00:00:00Z"),
+  });
+  return { ...stats, ...overrides };
+}
