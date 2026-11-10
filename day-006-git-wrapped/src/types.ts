@@ -76,6 +76,7 @@ export interface Stats {
   languageCount: number;
   mostActiveRepo: RepoActivity | null;
   totalStars: number;
+  /** Owned, non-fork repos pushed to during the year. */
   activeRepoCount: number;
   calendar: CalendarDay[];
 }
