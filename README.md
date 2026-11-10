@@ -14,6 +14,7 @@ I'm learning AI, and I'm building alongside it. Some days the project uses AI, s
 | 003 | [tiny-agent](day-003-tiny-agent/) | Python, Anthropic tool use API, Open-Meteo | Yes | A from-scratch agent loop with no frameworks: Claude picks from 5 tools (calculator, weather, sandboxed files, notes), sees the results and repeats until it can answer, with step limits, retries and a `--trace` mode. |
 | 004 | [pubdev-mcp](day-004-pubdev-mcp/) | Python, MCP SDK (FastMCP), httpx, pub.dev API | Yes | An MCP server that gives Claude live pub.dev access: search packages, check scores, compare up to 5 side by side with an active, stale or discontinued verdict, and list a publisher's packages. Works in Claude Code and Claude Desktop. |
 | 005 | [receipt-splitter](day-005-receipt-splitter/) | Python, Claude vision, Pydantic, Pillow | Yes | Snap a receipt and split the bill: Claude vision reads the items, Pydantic validates with one retry, sanity checks flag totals that don't add up, and tax and tip are split proportionally to the exact cent. |
+| 006 | [git-wrapped](day-006-git-wrapped/) | | | |
 <!-- PROJECTS-END -->
 
 ## How it works

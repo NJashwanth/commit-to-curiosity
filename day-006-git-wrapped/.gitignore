@@ -1,0 +1,6 @@
+node_modules/
+coverage/
+.env
+# Generated wrapped files in the working directory (the demo in docs/ is kept).
+/git-wrapped-*.html
+/wrapped*.html
