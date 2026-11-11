@@ -83,7 +83,18 @@ def test_main_runs_offline(tmp_path, capsys):
     train_mod.main(
         ["--model", "bigram", "--steps", "10", "--eval-interval", "5", "--eval-iters", "2",
          "--batch-size", "8", "--block-size", "8", "--offline", "--data-dir", str(tmp_path / "d"),
-         "--log", str(log)]
+         "--log", str(log), "--ckpt-dir", str(tmp_path / "ck"), "--plot", str(tmp_path / "loss.png")]
     )
     assert "best val loss" in capsys.readouterr().out
-    assert log.exists()
+    assert log.exists() and (tmp_path / "ck" / "bigram.pt").exists()
+    assert (tmp_path / "ck" / "vocab.json").exists() and (tmp_path / "loss.png").stat().st_size > 1000
+
+
+def test_main_no_plot(tmp_path):
+    train_mod.main(
+        ["--model", "gpt", "--steps", "4", "--eval-interval", "2", "--eval-iters", "1", "--batch-size", "4",
+         "--block-size", "8", "--n-embd", "16", "--n-head", "2", "--n-layer", "1", "--offline",
+         "--data-dir", str(tmp_path / "d"), "--log", str(tmp_path / "l.csv"), "--ckpt-dir", str(tmp_path / "ck"),
+         "--no-plot"]
+    )
+    assert (tmp_path / "ck" / "gpt.pt").exists() and not (tmp_path / "loss.png").exists()

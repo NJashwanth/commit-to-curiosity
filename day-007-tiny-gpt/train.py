@@ -14,8 +14,10 @@ from pathlib import Path
 
 import torch
 
+from checkpoint import save_checkpoint
 from data import Dataset
 from models import GPT, BigramLanguageModel, GPTConfig, count_parameters
+from plot import plot_losses
 
 HERE = Path(__file__).resolve().parent
 LOG_FIELDS = ["model", "step", "train_loss", "val_loss", "tokens_per_sec"]
@@ -152,6 +154,9 @@ def parse_args(argv=None):
     p.add_argument("--offline", action="store_true", help="skip the download and use the bundled text")
     p.add_argument("--data-dir", default=str(HERE / "data"))
     p.add_argument("--log", default=str(HERE / "runs" / "loss.csv"))
+    p.add_argument("--ckpt-dir", default=str(HERE / "checkpoints"))
+    p.add_argument("--plot", default=str(HERE / "docs" / "loss.png"), help="loss curve output path")
+    p.add_argument("--no-plot", action="store_true")
     return p.parse_args(argv)
 
 
@@ -172,8 +177,16 @@ def main(argv=None):
         eval_iters=args.eval_iters,
         seed=args.seed,
     )
-    result = train(model, dataset, cfg, log_path=args.log, model_name=args.model)
-    print(f"best val loss {result['best_val']:.4f}")
+    ckpt_path = Path(args.ckpt_dir) / f"{args.model}.pt"
+
+    def save_best(step, val_loss):
+        save_checkpoint(ckpt_path, model, dataset.tokenizer, step, val_loss)
+
+    dataset.tokenizer.save(Path(args.ckpt_dir) / "vocab.json")
+    result = train(model, dataset, cfg, log_path=args.log, model_name=args.model, on_best=save_best)
+    print(f"best val loss {result['best_val']:.4f} (checkpoint: {ckpt_path})")
+    if not args.no_plot:
+        print(f"loss curve: {plot_losses(args.log, args.plot)}")
 
 
 if __name__ == "__main__":
