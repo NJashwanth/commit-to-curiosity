@@ -1,0 +1,4 @@
+# Downloaded dataset and trained checkpoints are never committed.
+data/
+checkpoints/
+*.pt

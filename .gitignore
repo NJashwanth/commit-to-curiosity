@@ -78,3 +78,8 @@ logs/
 
 # --- generated eval receipts (python evals/generate.py) ---
 day-005-receipt-splitter/evals/receipts/
+
+# --- day-007 tiny-gpt: dataset and checkpoints ---
+day-007-tiny-gpt/data/
+day-007-tiny-gpt/checkpoints/
+*.pt
