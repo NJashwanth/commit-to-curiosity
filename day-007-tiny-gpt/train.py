@@ -15,7 +15,7 @@ from pathlib import Path
 import torch
 
 from data import Dataset
-from models import BigramLanguageModel, count_parameters
+from models import GPT, BigramLanguageModel, GPTConfig, count_parameters
 
 HERE = Path(__file__).resolve().parent
 LOG_FIELDS = ["model", "step", "train_loss", "val_loss", "tokens_per_sec"]
@@ -24,12 +24,12 @@ LOG_FIELDS = ["model", "step", "train_loss", "val_loss", "tokens_per_sec"]
 @dataclass
 class TrainConfig:
     steps: int = 3000
-    batch_size: int = 64
-    block_size: int = 128
+    batch_size: int = 32
+    block_size: int = 64
     lr: float = 3e-3
     weight_decay: float = 0.01
     eval_interval: int = 250
-    eval_iters: int = 40
+    eval_iters: int = 20
     seed: int = 1337
 
 
@@ -127,9 +127,11 @@ def train(model, dataset: Dataset, cfg: TrainConfig, log_path=None, model_name="
     return {"best_val": best_val, "final": last, "params": n_params, "tokens_per_sec": tps}
 
 
-def build_model(name: str, vocab_size: int):
+def build_model(name: str, vocab_size: int, block_size=64, n_embd=128, n_head=4, n_layer=5, dropout=0.1):
     if name == "bigram":
         return BigramLanguageModel(vocab_size)
+    if name == "gpt":
+        return GPT(GPTConfig(vocab_size, block_size, n_embd, n_head, n_layer, dropout))
     raise ValueError(f"unknown model {name!r}")
 
 
@@ -137,11 +139,15 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", choices=["gpt", "bigram"], default="gpt")
     p.add_argument("--steps", type=int, default=3000)
-    p.add_argument("--batch-size", type=int, default=64)
-    p.add_argument("--block-size", type=int, default=128)
+    p.add_argument("--batch-size", type=int, default=32)
+    p.add_argument("--block-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=None, help="default: 3e-3 for gpt, 1e-2 for bigram")
+    p.add_argument("--n-embd", type=int, default=128)
+    p.add_argument("--n-head", type=int, default=4)
+    p.add_argument("--n-layer", type=int, default=5)
+    p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--eval-interval", type=int, default=250)
-    p.add_argument("--eval-iters", type=int, default=40)
+    p.add_argument("--eval-iters", type=int, default=20)
     p.add_argument("--seed", type=int, default=1337)
     p.add_argument("--offline", action="store_true", help="skip the download and use the bundled text")
     p.add_argument("--data-dir", default=str(HERE / "data"))
@@ -153,8 +159,10 @@ def main(argv=None):
     args = parse_args(argv)
     dataset = Dataset.prepare(args.data_dir, offline=args.offline)
     torch.manual_seed(args.seed)
-    model = build_model(args.model, dataset.tokenizer.vocab_size)
-    lr = args.lr if args.lr is not None else 1e-2
+    model = build_model(
+        args.model, dataset.tokenizer.vocab_size, args.block_size, args.n_embd, args.n_head, args.n_layer, args.dropout
+    )
+    lr = args.lr if args.lr is not None else (1e-2 if args.model == "bigram" else 3e-3)
     cfg = TrainConfig(
         steps=args.steps,
         batch_size=args.batch_size,
