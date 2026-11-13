@@ -370,3 +370,200 @@ input[type="color"] {
   background: none;
   cursor: pointer;
 }
+
+/* ---- debugger ---- */
+
+.panel h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.dbg-current {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  font-size: 13px;
+}
+
+.dbg-op {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+
+.dbg-note {
+  margin-top: 4px;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.dbg-note.error {
+  color: var(--danger);
+}
+
+.dbg-addr {
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.dbg-hex {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.dbg-regs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.reg {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: var(--panel-2);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.reg span {
+  color: var(--muted);
+}
+
+.reg b {
+  font-weight: 600;
+}
+
+.reg.changed {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.reg.changed span {
+  color: var(--accent-ink);
+}
+
+.dbg-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  gap: 12px;
+}
+
+.dbg-disasm,
+.dbg-stack {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.dbg-disasm li {
+  display: grid;
+  grid-template-columns: 3.4ch 4.6ch minmax(0, 1fr);
+  gap: 8px;
+  padding: 0 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dbg-disasm li:hover {
+  background: var(--panel-2);
+}
+
+.dbg-disasm li.pc {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.dbg-disasm li.pc .dbg-addr {
+  color: var(--accent-ink);
+}
+
+.dbg-stack li {
+  display: flex;
+  gap: 8px;
+  padding: 0 6px;
+  border-radius: 4px;
+  color: var(--line);
+}
+
+.dbg-stack li span {
+  color: var(--muted);
+}
+
+.dbg-stack li.live {
+  color: var(--text);
+}
+
+.dbg-stack li.top {
+  background: var(--panel-2);
+}
+
+.mem-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mem-controls {
+  display: flex;
+  gap: 4px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.mem-controls input {
+  width: 6ch;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-2);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.chip {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.dbg-memory {
+  margin: 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: var(--panel-2);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.dbg-memory .pc {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.dbg-memory .i {
+  outline: 1px solid var(--accent);
+}

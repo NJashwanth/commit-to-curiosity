@@ -54,6 +54,38 @@
             <label>Pixel off <input id="color-off" type="color" /></label>
           </div>
         </details>
+
+        <details id="debugger" class="panel">
+          <summary>Debugger</summary>
+          <div class="toolbar">
+            <button id="dbg-run" class="btn" type="button">Pause</button>
+            <button id="dbg-step" class="btn" type="button" title="Shortcut: N">Step</button>
+            <button id="dbg-frame" class="btn" type="button">Step frame</button>
+          </div>
+          <div id="dbg-current" class="dbg-current" aria-live="polite"></div>
+          <div id="dbg-regs" class="dbg-regs" aria-label="Registers"></div>
+          <div class="dbg-cols">
+            <section>
+              <h3>Disassembly</h3>
+              <ol id="dbg-disasm" class="dbg-disasm"></ol>
+            </section>
+            <section>
+              <h3>Stack</h3>
+              <ol id="dbg-stack" class="dbg-stack"></ol>
+            </section>
+          </div>
+          <section>
+            <h3 class="mem-head">
+              Memory
+              <span class="mem-controls">
+                <input id="mem-addr" type="text" inputmode="text" spellcheck="false" aria-label="Memory address (hex)" />
+                <button class="chip" type="button" data-follow="pc">PC</button>
+                <button class="chip" type="button" data-follow="i">I</button>
+              </span>
+            </h3>
+            <pre id="dbg-memory" class="dbg-memory"></pre>
+          </section>
+        </details>
       </aside>
     </main>
 

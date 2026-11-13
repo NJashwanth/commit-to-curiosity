@@ -173,6 +173,8 @@ export class App {
   // ---- the loop ----
 
   private readonly frame = (now: number): void => {
+    // Schedule first, so nothing below can stop the loop.
+    requestAnimationFrame(this.frame);
     const dt = this.lastTime === null ? 0 : now - this.lastTime;
     this.lastTime = now;
     if (this.state === "running") this.guard(() => this.machine.advance(dt));
@@ -181,7 +183,6 @@ export class App {
     this.syncKeys();
     this.updateStatus();
     if (this.state === "running") this.notify();
-    requestAnimationFrame(this.frame);
   };
 
   private guard(fn: () => unknown): void {
@@ -201,7 +202,14 @@ export class App {
   }
 
   private notify(): void {
-    for (const fn of this.listeners) fn();
+    for (const fn of this.listeners) {
+      try {
+        fn();
+      } catch (err) {
+        // A broken panel must not take the emulator down with it.
+        console.error(err);
+      }
+    }
   }
 
   private paint(): void {
