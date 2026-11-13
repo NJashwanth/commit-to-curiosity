@@ -104,9 +104,8 @@ Supported images: `.jpg`, `.jpeg`, `.png`, `.heic`, `.heif`.
 ```bash
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest          # 131 tests, 99% coverage, no API calls
+.venv/bin/python -m pytest --cov-fail-under=85   # fail if coverage drops under 85%
 ```
-
-CI (`.github/workflows/day-005-tests.yml`) runs the suite on every change to this folder and fails under 85% coverage.
 
 **Evals** (real API calls, one per receipt)
 

@@ -35,7 +35,7 @@ describe("catalog", () => {
   it("builds URLs under the site's base path", () => {
     const rom = findRom("snek")!;
     expect(romUrl(rom, "/")).toBe("/roms/snek.ch8");
-    expect(romUrl(rom, "/commit-to-curiosity/chip8/")).toBe("/commit-to-curiosity/chip8/roms/snek.ch8");
+    expect(romUrl(rom, "/some/sub/path/")).toBe("/some/sub/path/roms/snek.ch8");
     expect(romUrl(rom, "./")).toBe("./roms/snek.ch8");
     expect(romUrl(rom, "/base")).toBe("/base/roms/snek.ch8");
   });

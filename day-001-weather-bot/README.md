@@ -52,10 +52,10 @@ AI mode replaces this with 2 to 4 sentences, for example "Grab a light rain jack
 cd day-001-weather-bot
 pip install -r requirements-dev.txt
 python -m pytest                      # runs with coverage, config in pytest.ini
-python -m pytest --cov-fail-under=85  # what CI enforces
+python -m pytest --cov-fail-under=85  # fail if coverage drops under 85%
 ```
 
-No test touches the network: Open-Meteo and the Claude API are mocked with `responses`, and any unmocked request raises. The suite covers question parsing (cities, time frames, the "couldn't tell which day" note), the Open-Meteo client (success, unknown city, params, timeouts, 5xx, bad JSON), fallback formatting and day selection, AI mode and its fallback, and the CLI end to end. Currently 119 tests at 99% coverage. GitHub Actions runs them on pushes that touch this folder (`.github/workflows/day-001-tests.yml`).
+No test touches the network: Open-Meteo and the Claude API are mocked with `responses`, and any unmocked request raises. The suite covers question parsing (cities, time frames, the "couldn't tell which day" note), the Open-Meteo client (success, unknown city, params, timeouts, 5xx, bad JSON), fallback formatting and day selection, AI mode and its fallback, and the CLI end to end. Currently 119 tests at 99% coverage.
 
 ## What I learned
 

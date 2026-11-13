@@ -6,8 +6,6 @@
 
 A CHIP-8 emulator in TypeScript that runs in the browser. Pick a built-in ROM or open your own `.ch8` file, play with the keyboard or the on-screen keypad, and pause at any point to step through the program one instruction at a time while watching the registers, stack, disassembly and memory change.
 
-Once GitHub Pages is enabled for the repo it is live at **https://njashwanth.github.io/commit-to-curiosity/chip8/**.
-
 ![Br8kout running in the emulator](docs/game.png)
 
 ## Why I built it
@@ -21,7 +19,6 @@ I wanted to know what actually happens between "here is a file of bytes" and "a 
 - Web Audio (one square-wave oscillator gated by a gain node)
 - Pointer Events for the touch keypad
 - vitest with v8 coverage, plus Playwright (headless Chromium) for the screenshots
-- GitHub Actions for tests and a GitHub Pages deploy
 
 ## How to run
 
@@ -30,7 +27,7 @@ cd day-008-chip8-emu
 npm install
 npm run dev       # play locally at http://localhost:5173
 npm run build     # type-check, then build the static site into dist/
-npm run preview   # serve dist/ at /commit-to-curiosity/chip8/, like Pages
+npm run preview   # serve the built dist/ locally
 npm test          # 329 tests, no browser needed
 npm run test:cov  # same, with coverage (fails under 90% on the core)
 npm run roms      # reassemble roms/*.asm into public/roms/*.ch8
@@ -181,7 +178,7 @@ The four games come from the [CHIP-8 Community Archive](https://github.com/JohnE
 - disassembler mnemonics for all 35 opcodes, and an exhaustive round trip: all 65,536 16-bit words go through the disassembler and back through the assembler unchanged
 - every bundled ROM runs 20 seconds of emulated play with random key presses under three seeds without an error, and the demo ROM's letters, divider and ball are checked pixel by pixel
 
-Core coverage (cpu, quirks, display, machine, disasm) is 100% of lines and branches. CI fails if it drops under 90%.
+Core coverage (cpu, quirks, display, machine, disasm) is 100% of lines and branches. `npm run test:cov` fails if it drops under 90%.
 
 ## Project layout
 
@@ -222,7 +219,7 @@ docs/           screenshots
 - Breakpoints and watchpoints in the debugger (stop when PC reaches an address, or when memory at I changes).
 - Save states: serialise memory, registers and the framebuffer to localStorage.
 - Rewind: keep the last few seconds of states in a ring buffer and scrub backwards.
-- Run the [Timendus CHIP-8 test suite](https://github.com/Timendus/chip8-test-suite) in CI as a second opinion on the quirks (it's GPL-3.0, so fetch it at test time rather than bundling it).
+- Run the [Timendus CHIP-8 test suite](https://github.com/Timendus/chip8-test-suite) as a second opinion on the quirks (it's GPL-3.0, so fetch it at test time rather than bundling it).
 
 ## Author
 

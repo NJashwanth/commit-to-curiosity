@@ -14,7 +14,6 @@ I use language models every day and wanted to know what is inside one. Writing t
 
 - Python 3.10+, PyTorch (CPU), matplotlib
 - pytest and pytest-cov (99% coverage, suite runs in about 5 seconds)
-- GitHub Actions (CPU torch, fails under 85% coverage)
 
 ## How to run
 

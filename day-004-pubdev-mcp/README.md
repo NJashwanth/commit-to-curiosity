@@ -109,9 +109,8 @@ npx @modelcontextprotocol/inspector --cli .venv/bin/python server.py \
 ```bash
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest          # 89 tests, ~99% coverage, no network
+.venv/bin/python -m pytest --cov-fail-under=85   # fail if coverage drops under 85%
 ```
-
-CI (`.github/workflows/day-004-tests.yml`) runs the suite on every change to this folder and fails under 85% coverage.
 
 ## Demo output
 

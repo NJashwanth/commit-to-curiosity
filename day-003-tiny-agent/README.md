@@ -22,7 +22,7 @@ Day 1 was a single API call and Day 2 was RAG. Every agent framework hides the s
 - Open-Meteo geocoding and forecast APIs (no key needed) via `requests`
 - `ast` for the calculator, `pathlib` for the file sandbox
 - `claude-haiku-5-5` by default, override with `ANTHROPIC_MODEL` or `--model`
-- `pytest` and `pytest-cov`, GitHub Actions
+- `pytest` and `pytest-cov`
 
 ## How to run
 

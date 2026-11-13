@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 
-// The core is everything that runs without a browser. CI fails if its
-// coverage drops under 90%. Browser glue (ui, audio, debugger panel) is
+// The core is everything that runs without a browser. `npm run test:cov` fails
+// if its coverage drops under 90%. Browser glue (ui, audio, debugger panel) is
 // exercised by hand and by the Playwright screenshots instead.
 export const CORE_FILES = [
   "src/hex.ts",
@@ -12,10 +12,7 @@ export const CORE_FILES = [
   "src/disasm.ts",
 ];
 
-export default defineConfig(({ command, isPreview }) => ({
-  // Deployed to GitHub Pages under /commit-to-curiosity/chip8/. `npm run preview`
-  // serves the build at the same path; `npm run dev` stays at the root.
-  base: command === "build" || isPreview ? "/commit-to-curiosity/chip8/" : "/",
+export default defineConfig({
   build: { outDir: "dist", emptyOutDir: true },
   test: {
     include: ["tests/**/*.test.ts"],
@@ -27,4 +24,4 @@ export default defineConfig(({ command, isPreview }) => ({
       thresholds: { lines: 90, statements: 90, functions: 90, branches: 90 },
     },
   },
-}));
+});
