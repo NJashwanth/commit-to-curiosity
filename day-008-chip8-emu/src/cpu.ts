@@ -117,6 +117,12 @@ export class Cpu {
   private vblankReady = true;
   /** DXYN is blocked until the next vblank (display wait quirk). */
   waitingForVblank = false;
+  /** Keypad state, indexed by hex key 0-F. */
+  readonly keys: boolean[] = new Array(16).fill(false);
+  /** Register FX0A is waiting to fill, or -1 when not waiting. */
+  waitingForKey = -1;
+  /** Key pressed during an FX0A wait; it is stored when released. */
+  private pendingKey = -1;
 
   constructor(options: CpuOptions = {}) {
     this.quirks = resolveQuirks(options.quirks);
@@ -138,6 +144,42 @@ export class Cpu {
     this.display.clear();
     this.vblankReady = true;
     this.waitingForVblank = false;
+    this.keys.fill(false);
+    this.waitingForKey = -1;
+    this.pendingKey = -1;
+  }
+
+  /** True while the CPU is stalled on a key press or a vblank. */
+  get blocked(): boolean {
+    return this.waitingForVblank || this.waitingForKey >= 0;
+  }
+
+  /** Called at 60Hz: count both timers down and start a new frame. */
+  tickTimers(): void {
+    if (this.delayTimer > 0) this.delayTimer--;
+    if (this.soundTimer > 0) this.soundTimer--;
+    this.vblank();
+  }
+
+  keyDown(key: number): void {
+    if (key < 0 || key > 0xf) return;
+    this.keys[key] = true;
+    if (this.waitingForKey >= 0 && this.pendingKey < 0) this.pendingKey = key;
+  }
+
+  /** Releasing the key pressed during FX0A completes the wait, like on the COSMAC VIP. */
+  keyUp(key: number): void {
+    if (key < 0 || key > 0xf) return;
+    this.keys[key] = false;
+    if (this.waitingForKey >= 0 && this.pendingKey === key) {
+      this.v[this.waitingForKey] = key;
+      this.waitingForKey = -1;
+      this.pendingKey = -1;
+    }
+  }
+
+  releaseAllKeys(): void {
+    for (let k = 0; k < 16; k++) if (this.keys[k]) this.keyUp(k);
   }
 
   /** Signal the start of a 60Hz frame. Releases a draw held by the display wait quirk. */
@@ -163,7 +205,7 @@ export class Cpu {
    * If the instruction throws, PC is left pointing at it so a debugger shows the culprit.
    */
   step(): void {
-    if (this.waitingForVblank) return;
+    if (this.blocked) return;
     const at = this.pc;
     const op = this.fetch(at);
     this.pc = (at + 2) & 0xfff;
@@ -242,6 +284,21 @@ export class Cpu {
       case 0xd:
         this.draw(f);
         return;
+      case 0xe:
+        if (f.nn === 0x9e) {
+          // EX9E  skip if key VX is down
+          if (this.keys[v[f.x] & 0xf]) this.skip();
+          return;
+        }
+        if (f.nn === 0xa1) {
+          // EXA1  skip if key VX is up
+          if (!this.keys[v[f.x] & 0xf]) this.skip();
+          return;
+        }
+        break;
+      case 0xf:
+        if (this.misc(f)) return;
+        break;
     }
     throw new UnknownOpcodeError(this.at(), f.op);
   }
@@ -253,6 +310,47 @@ export class Cpu {
 
   private skip(): void {
     this.pc = (this.pc + 2) & 0xfff;
+  }
+
+  /** FXNN: timers, keypad wait, I arithmetic, font, BCD and register load/store. Returns false if unknown. */
+  private misc(f: Fields): boolean {
+    const { v, memory } = this;
+    const { x } = f;
+    switch (f.nn) {
+      case 0x07: // FX07  VX = delay timer
+        v[x] = this.delayTimer;
+        return true;
+      case 0x0a: // FX0A  wait for a key press and release, store it in VX
+        this.waitingForKey = x;
+        this.pendingKey = -1;
+        return true;
+      case 0x15: // FX15  delay timer = VX
+        this.delayTimer = v[x];
+        return true;
+      case 0x18: // FX18  sound timer = VX
+        this.soundTimer = v[x];
+        return true;
+      case 0x1e: // FX1E  I += VX
+        this.i = (this.i + v[x]) & 0xffff;
+        return true;
+      case 0x29: // FX29  I = address of the font glyph for the low nibble of VX
+        this.i = FONT_START + (v[x] & 0xf) * FONT_GLYPH_BYTES;
+        return true;
+      case 0x33: // FX33  store VX as three decimal digits at I, I+1, I+2
+        memory[this.i & 0xfff] = Math.floor(v[x] / 100);
+        memory[(this.i + 1) & 0xfff] = Math.floor(v[x] / 10) % 10;
+        memory[(this.i + 2) & 0xfff] = v[x] % 10;
+        return true;
+      case 0x55: // FX55  store V0..VX at I
+        for (let r = 0; r <= x; r++) memory[(this.i + r) & 0xfff] = v[r];
+        if (this.quirks.loadStoreIncrementsI) this.i = (this.i + x + 1) & 0xffff;
+        return true;
+      case 0x65: // FX65  load V0..VX from I
+        for (let r = 0; r <= x; r++) v[r] = memory[(this.i + r) & 0xfff];
+        if (this.quirks.loadStoreIncrementsI) this.i = (this.i + x + 1) & 0xffff;
+        return true;
+    }
+    return false;
   }
 
   /** DXYN: XOR an N-row sprite from memory at I onto the screen at (VX, VY). VF = collision. */
