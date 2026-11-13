@@ -1,3 +1,4 @@
+import { Display } from "./display";
 import { hex } from "./hex";
 import { resolveQuirks, type Quirks } from "./quirks";
 
@@ -111,6 +112,11 @@ export class Cpu {
   /** Interpreter quirks. Safe to change between instructions. */
   quirks: Quirks;
   random: Random;
+  readonly display = new Display();
+  /** True once a 60Hz frame has started since the last draw (display wait quirk). */
+  private vblankReady = true;
+  /** DXYN is blocked until the next vblank (display wait quirk). */
+  waitingForVblank = false;
 
   constructor(options: CpuOptions = {}) {
     this.quirks = resolveQuirks(options.quirks);
@@ -129,6 +135,15 @@ export class Cpu {
     this.sp = 0;
     this.delayTimer = 0;
     this.soundTimer = 0;
+    this.display.clear();
+    this.vblankReady = true;
+    this.waitingForVblank = false;
+  }
+
+  /** Signal the start of a 60Hz frame. Releases a draw held by the display wait quirk. */
+  vblank(): void {
+    this.vblankReady = true;
+    this.waitingForVblank = false;
   }
 
   /** Reset, then copy a ROM into memory at 0x200. */
@@ -148,6 +163,7 @@ export class Cpu {
    * If the instruction throws, PC is left pointing at it so a debugger shows the culprit.
    */
   step(): void {
+    if (this.waitingForVblank) return;
     const at = this.pc;
     const op = this.fetch(at);
     this.pc = (at + 2) & 0xfff;
@@ -170,7 +186,11 @@ export class Cpu {
     const { v } = this;
     switch (f.op >> 12) {
       case 0x0:
-        if (f.op === 0x00e0) break;
+        if (f.op === 0x00e0) {
+          // 00E0  CLS
+          this.display.clear();
+          return;
+        }
         if (f.op === 0x00ee) {
           // 00EE  RET: pop the return address
           if (this.sp === 0) throw new StackUnderflowError(this.at(), f.op);
@@ -219,6 +239,9 @@ export class Cpu {
       case 0xc: // CXNN  VX = random byte AND NN
         v[f.x] = this.random() & f.nn;
         return;
+      case 0xd:
+        this.draw(f);
+        return;
     }
     throw new UnknownOpcodeError(this.at(), f.op);
   }
@@ -230,6 +253,23 @@ export class Cpu {
 
   private skip(): void {
     this.pc = (this.pc + 2) & 0xfff;
+  }
+
+  /** DXYN: XOR an N-row sprite from memory at I onto the screen at (VX, VY). VF = collision. */
+  private draw(f: Fields): void {
+    if (this.quirks.displayWait) {
+      if (!this.vblankReady) {
+        // Hold PC on this instruction until the next frame starts.
+        this.pc = this.at();
+        this.waitingForVblank = true;
+        return;
+      }
+      this.vblankReady = false;
+    }
+    const rows: number[] = [];
+    for (let r = 0; r < f.n; r++) rows.push(this.memory[(this.i + r) & 0xfff]);
+    const hit = this.display.drawSprite(this.v[f.x], this.v[f.y], rows, this.quirks.clipSprites);
+    this.v[0xf] = hit ? 1 : 0;
   }
 
   /** 8XYN: register-to-register arithmetic and logic. VF is written last, so it wins when X is F. */
