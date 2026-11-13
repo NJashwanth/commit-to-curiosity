@@ -11,7 +11,7 @@ A test (`tests/roms.test.ts`) checks that every bundled file is listed here with
 | `jn-demo.ch8` | J N demo | Jashwanth Neela | Octo · 30 | [`roms/jn-demo.asm`](roms/jn-demo.asm) | `6d5dab7e67dbb267e5ebd842eaf4d0f9862669dc4225ea039b76afc8cbb81844` |
 | `keypad.ch8` | Keypad test | Jashwanth Neela | VIP · 15 | [`roms/keypad.asm`](roms/keypad.asm) | `17c2c53b0d587a568a493e6058feca6be121bc9af6af20917e43a9a163a41b32` |
 
-**License:** original work, written for this repository and covered by the same terms as the rest of it.
+**License:** original work, written for this repository and released under the MIT License like the rest of it (see [`LICENSE`](../LICENSE) at the repo root).
 
 These are assembled with the small assembler in [`tools/asm.ts`](tools/asm.ts). After editing a `.asm` file, run `npm run roms` to rebuild the `.ch8`. A test fails if the committed binary and its source disagree.
 

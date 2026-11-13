@@ -4,6 +4,7 @@
   "private": true,
   "description": "A CHIP-8 emulator in TypeScript that runs in the browser, with quirk toggles, sound, touch keys and a step debugger.",
   "author": "Jashwanth Neela",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=20.19"
