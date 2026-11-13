@@ -2,11 +2,61 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="A CHIP-8 emulator in TypeScript with quirk toggles, sound, touch keys and a step debugger." />
+    <meta name="theme-color" content="#14110c" />
     <title>CHIP-8 Emulator</title>
   </head>
   <body>
-    <main id="app">CHIP-8 emulator</main>
+    <header class="top">
+      <h1>CHIP-8 <span class="sub">emulator · Day 008</span></h1>
+      <p id="status" class="status" role="status" aria-live="polite">No ROM loaded</p>
+    </header>
+
+    <main class="layout">
+      <section class="stage" aria-label="Emulator">
+        <div id="screen-wrap" class="screen">
+          <canvas id="screen" width="64" height="32" aria-label="CHIP-8 display, 64 by 32 pixels"></canvas>
+          <div id="screen-msg" class="screen-msg">
+            <p>Open a ROM or drop a <code>.ch8</code> file here</p>
+          </div>
+        </div>
+
+        <div class="toolbar" role="toolbar" aria-label="Emulator controls">
+          <label class="btn btn-file">
+            Open ROM…
+            <input id="rom-file" type="file" accept=".ch8,.c8,.rom,.bin" />
+          </label>
+          <button id="btn-run" class="btn" type="button" disabled>Pause</button>
+          <button id="btn-reset" class="btn" type="button" disabled>Reset</button>
+          <button id="btn-mute" class="btn" type="button" aria-pressed="false">Sound on</button>
+        </div>
+
+        <div id="keypad" class="keypad" aria-label="CHIP-8 keypad"></div>
+        <p class="hint">Keyboard: <kbd>1234</kbd> <kbd>QWER</kbd> <kbd>ASDF</kbd> <kbd>ZXCV</kbd> · <kbd>P</kbd> pause · <kbd>M</kbd> mute</p>
+      </section>
+
+      <aside class="side">
+        <details id="settings" class="panel" open>
+          <summary>Settings</summary>
+          <div class="field">
+            <label for="speed">Speed</label>
+            <input id="speed" type="range" min="0" step="1" />
+            <output id="speed-out" for="speed"></output>
+          </div>
+          <div class="field">
+            <label for="preset">Quirks</label>
+            <select id="preset"></select>
+          </div>
+          <div id="quirks" class="quirks"></div>
+          <div class="field colors">
+            <label>Pixel on <input id="color-on" type="color" /></label>
+            <label>Pixel off <input id="color-off" type="color" /></label>
+          </div>
+        </details>
+      </aside>
+    </main>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
