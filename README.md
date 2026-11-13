@@ -16,6 +16,7 @@ I'm learning AI, and I'm building alongside it. Some days the project uses AI, s
 | 005 | [receipt-splitter](day-005-receipt-splitter/) | Python, Claude vision, Pydantic, Pillow | Yes | Snap a receipt and split the bill: Claude vision reads the items, Pydantic validates with one retry, sanity checks flag totals that don't add up, and tax and tip are split proportionally to the exact cent. |
 | 006 | [git-wrapped](day-006-git-wrapped/) | | | |
 | 007 | [tiny-gpt](day-007-tiny-gpt/) | Python, PyTorch, matplotlib | Yes | A character-level GPT built from scratch with hand-written causal attention and trained on CPU in about 8 minutes; it cuts validation loss from 2.48 (bigram baseline) to 1.70 and writes Shakespeare-ish text with temperature and top-k sampling. |
+| 008 | [chip8-emu](day-008-chip8-emu/) | | | |
 <!-- PROJECTS-END -->
 
 ## How it works

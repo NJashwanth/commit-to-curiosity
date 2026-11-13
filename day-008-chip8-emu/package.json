@@ -1,0 +1,27 @@
+{
+  "name": "chip8-emu",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A CHIP-8 emulator in TypeScript that runs in the browser, with quirk toggles, sound, touch keys and a step debugger.",
+  "author": "Jashwanth Neela",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@vitest/coverage-v8": "^4.1.12",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^4.1.12"
+  }
+}
