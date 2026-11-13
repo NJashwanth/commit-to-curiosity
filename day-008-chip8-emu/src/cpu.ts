@@ -46,6 +46,18 @@ export class UnknownOpcodeError extends Chip8Error {
   }
 }
 
+export class StackOverflowError extends Chip8Error {
+  constructor(pc: number, opcode: number) {
+    super(`Stack overflow: more than ${STACK_DEPTH} nested calls`, pc, opcode);
+  }
+}
+
+export class StackUnderflowError extends Chip8Error {
+  constructor(pc: number, opcode: number) {
+    super("Stack underflow: return with an empty stack", pc, opcode);
+  }
+}
+
 export class RomTooLargeError extends Error {
   constructor(readonly size: number) {
     super(`ROM is ${size} bytes; the most that fits at 0x200 is ${MAX_ROM_SIZE}`);
@@ -158,8 +170,32 @@ export class Cpu {
     const { v } = this;
     switch (f.op >> 12) {
       case 0x0:
+        if (f.op === 0x00e0) break;
+        if (f.op === 0x00ee) {
+          // 00EE  RET: pop the return address
+          if (this.sp === 0) throw new StackUnderflowError(this.at(), f.op);
+          this.pc = this.stack[--this.sp];
+          return;
+        }
         // 0NNN SYS: a call into COSMAC VIP machine code. Modern interpreters ignore it.
-        if (f.op === 0x00e0 || f.op === 0x00ee) break;
+        return;
+      case 0x1: // 1NNN  JP NNN
+        this.pc = f.nnn;
+        return;
+      case 0x2: // 2NNN  CALL NNN: push the return address, then jump
+        if (this.sp === STACK_DEPTH) throw new StackOverflowError(this.at(), f.op);
+        this.stack[this.sp++] = this.pc;
+        this.pc = f.nnn;
+        return;
+      case 0x3: // 3XNN  skip if VX == NN
+        if (v[f.x] === f.nn) this.skip();
+        return;
+      case 0x4: // 4XNN  skip if VX != NN
+        if (v[f.x] !== f.nn) this.skip();
+        return;
+      case 0x5: // 5XY0  skip if VX == VY
+        if (f.n !== 0) break;
+        if (v[f.x] === v[f.y]) this.skip();
         return;
       case 0x6: // 6XNN  VX = NN
         v[f.x] = f.nn;
@@ -170,14 +206,30 @@ export class Cpu {
       case 0x8:
         this.alu(f);
         return;
+      case 0x9: // 9XY0  skip if VX != VY
+        if (f.n !== 0) break;
+        if (v[f.x] !== v[f.y]) this.skip();
+        return;
       case 0xa: // ANNN  I = NNN
         this.i = f.nnn;
+        return;
+      case 0xb: // BNNN  jump to NNN + V0, or BXNN to XNN + VX with the jump quirk
+        this.pc = (f.nnn + v[this.quirks.jumpUsesVX ? f.x : 0]) & 0xfff;
         return;
       case 0xc: // CXNN  VX = random byte AND NN
         v[f.x] = this.random() & f.nn;
         return;
     }
-    throw new UnknownOpcodeError((this.pc - 2) & 0xfff, f.op);
+    throw new UnknownOpcodeError(this.at(), f.op);
+  }
+
+  /** Address of the instruction being executed (PC has already moved past it). */
+  private at(): number {
+    return (this.pc - 2) & 0xfff;
+  }
+
+  private skip(): void {
+    this.pc = (this.pc + 2) & 0xfff;
   }
 
   /** 8XYN: register-to-register arithmetic and logic. VF is written last, so it wins when X is F. */
@@ -236,6 +288,6 @@ export class Cpu {
         return;
       }
     }
-    throw new UnknownOpcodeError((this.pc - 2) & 0xfff, f.op);
+    throw new UnknownOpcodeError(this.at(), f.op);
   }
 }
