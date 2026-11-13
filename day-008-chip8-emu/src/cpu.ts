@@ -1,4 +1,5 @@
 import { hex } from "./hex";
+import { resolveQuirks, type Quirks } from "./quirks";
 
 export const MEMORY_SIZE = 4096;
 export const PROGRAM_START = 0x200;
@@ -52,6 +53,28 @@ export class RomTooLargeError extends Error {
   }
 }
 
+/** A source of random bytes (0-255). Inject a seeded one for reproducible runs. */
+export type Random = () => number;
+
+/** A small seeded PRNG (mulberry32) that returns bytes. Same seed, same sequence. */
+export function seededRandom(seed: number): Random {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) & 0xff;
+  };
+}
+
+export const mathRandom: Random = () => Math.floor(Math.random() * 256);
+
+export interface CpuOptions {
+  quirks?: Partial<Quirks>;
+  random?: Random;
+}
+
 /** Decoded fields of a 16-bit opcode, named the way the CHIP-8 docs name them. */
 interface Fields {
   op: number;
@@ -73,8 +96,13 @@ export class Cpu {
   sp = 0;
   delayTimer = 0;
   soundTimer = 0;
+  /** Interpreter quirks. Safe to change between instructions. */
+  quirks: Quirks;
+  random: Random;
 
-  constructor() {
+  constructor(options: CpuOptions = {}) {
+    this.quirks = resolveQuirks(options.quirks);
+    this.random = options.random ?? mathRandom;
     this.reset();
   }
 
@@ -139,9 +167,74 @@ export class Cpu {
       case 0x7: // 7XNN  VX += NN (no carry flag)
         v[f.x] = (v[f.x] + f.nn) & 0xff;
         return;
+      case 0x8:
+        this.alu(f);
+        return;
       case 0xa: // ANNN  I = NNN
         this.i = f.nnn;
         return;
+      case 0xc: // CXNN  VX = random byte AND NN
+        v[f.x] = this.random() & f.nn;
+        return;
+    }
+    throw new UnknownOpcodeError((this.pc - 2) & 0xfff, f.op);
+  }
+
+  /** 8XYN: register-to-register arithmetic and logic. VF is written last, so it wins when X is F. */
+  private alu(f: Fields): void {
+    const { v, quirks } = this;
+    const { x, y } = f;
+    switch (f.n) {
+      case 0x0: // 8XY0  VX = VY
+        v[x] = v[y];
+        return;
+      case 0x1: // 8XY1  VX |= VY
+        v[x] |= v[y];
+        if (quirks.vfReset) v[0xf] = 0;
+        return;
+      case 0x2: // 8XY2  VX &= VY
+        v[x] &= v[y];
+        if (quirks.vfReset) v[0xf] = 0;
+        return;
+      case 0x3: // 8XY3  VX ^= VY
+        v[x] ^= v[y];
+        if (quirks.vfReset) v[0xf] = 0;
+        return;
+      case 0x4: {
+        // 8XY4  VX += VY, VF = carry
+        const sum = v[x] + v[y];
+        v[x] = sum & 0xff;
+        v[0xf] = sum > 0xff ? 1 : 0;
+        return;
+      }
+      case 0x5: {
+        // 8XY5  VX -= VY, VF = 1 when there is no borrow
+        const [a, b] = [v[x], v[y]];
+        v[x] = (a - b) & 0xff;
+        v[0xf] = a >= b ? 1 : 0;
+        return;
+      }
+      case 0x6: {
+        // 8XY6  VX = source >> 1, VF = bit shifted out
+        const src = quirks.shiftUsesVY ? v[y] : v[x];
+        v[x] = src >> 1;
+        v[0xf] = src & 1;
+        return;
+      }
+      case 0x7: {
+        // 8XY7  VX = VY - VX, VF = 1 when there is no borrow
+        const [a, b] = [v[x], v[y]];
+        v[x] = (b - a) & 0xff;
+        v[0xf] = b >= a ? 1 : 0;
+        return;
+      }
+      case 0xe: {
+        // 8XYE  VX = source << 1, VF = bit shifted out
+        const src = quirks.shiftUsesVY ? v[y] : v[x];
+        v[x] = (src << 1) & 0xff;
+        v[0xf] = src >> 7;
+        return;
+      }
     }
     throw new UnknownOpcodeError((this.pc - 2) & 0xfff, f.op);
   }
