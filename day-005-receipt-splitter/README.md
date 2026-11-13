@@ -276,4 +276,5 @@ A caveat: these receipts are clean, typed and short. A perfect score here says t
 - Add a small web UI: snap a photo, tap names onto items
 
 ## Author
+
 **Jashwanth Neela** · [GitHub](https://github.com/NJashwanth)

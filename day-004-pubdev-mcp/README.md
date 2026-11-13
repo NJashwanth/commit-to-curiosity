@@ -240,3 +240,7 @@ compare_packages(names=["dio"])     -> {"error": "Give at least 2 different pack
 - Read the changelog and open issue counts for a package
 - Add `sort` options (likes, downloads, recently updated) to `search_packages`
 - Publish it so others can `uvx pubdev-mcp`
+
+## Author
+
+**Jashwanth Neela** · [GitHub](https://github.com/NJashwanth)

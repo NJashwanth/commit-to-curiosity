@@ -396,3 +396,7 @@ No test touches the network or downloads a model. `git` is mocked, the embedder 
 - Embed in 256 token windows to match the model, and compare retrieval quality.
 - Incremental re-index by file hash, other branches, private repos and local folders.
 - A `list` command for indexed repos, and multi-turn memory in `chat`.
+
+## Author
+
+**Jashwanth Neela** · [GitHub](https://github.com/NJashwanth)

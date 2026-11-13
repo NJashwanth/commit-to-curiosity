@@ -73,3 +73,7 @@ No test touches the network: Open-Meteo and the Claude API are mocked with `resp
 - Disambiguate cities (Portland, OR vs ME) by showing the top matches.
 - Hourly "best time to go outside" in fallback mode too (AI mode already gets the hourly data).
 - Cache geocoding results.
+
+## Author
+
+**Jashwanth Neela** · [GitHub](https://github.com/NJashwanth)

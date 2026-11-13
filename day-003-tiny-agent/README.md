@@ -179,3 +179,7 @@ Steps: 4 | Tools used: calculator x2, read_file x1, save_note x1 | Tokens: 3,168
 - Keep conversation history between questions for a chat mode
 - Ask for confirmation before tools that write, like `save_note`
 - Token budget limit in addition to the step limit
+
+## Author
+
+**Jashwanth Neela** · [GitHub](https://github.com/NJashwanth)
