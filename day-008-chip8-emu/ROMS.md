@@ -27,7 +27,7 @@ Source: [JohnEarnest/chip8Archive](https://github.com/JohnEarnest/chip8Archive),
 | File | Title | Author | Released | Preset · speed | Controls | SHA-256 |
 |------|-------|--------|----------|----------------|----------|---------|
 | `br8kout.ch8` | Br8kout | SharpenedSpoon | 2014-09-01 (Octojam 1) | Octo · 7 | A / D | `a1589caa2cd48904a5f77bae12c6887b7ba196d130daecfc2f4d230d20cb1f6b` |
-| `superpong.ch8` | Super Pong | offstatic | 2021-10-15 (Octojam 8) | Octo · 30 | W/S, A/D, E restarts | `98e64a4728f15e969148a503d4176fe803df72307d86f353f2bb472cc3287899` |
+| `superpong.ch8` | Super Pong | offstatic | 2021-10-15 (Octojam 8) | Octo · 30 | E starts, W/S, A/D | `98e64a4728f15e969148a503d4176fe803df72307d86f353f2bb472cc3287899` |
 | `flightrunner.ch8` | Flight Runner | TodPunk | 2014-11-01 (Octojam 1) | Octo · 15 | W A S D | `982b4799ec822369ea26f0884669fd23caeec805d10e5e9caff434e0851b2e5e` |
 | `snek.ch8` | Snek | John Earnest | 2021-10-01 (Octojam 8) | Octo · 1000 | W A S D | `09f67a5ef6f3cd9a65edc1e73786bf31a524e279bc1607e1953c6eb80c33b6ee` |
 

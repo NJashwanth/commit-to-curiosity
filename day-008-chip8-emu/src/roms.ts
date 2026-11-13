@@ -53,7 +53,7 @@ export const BUILT_IN_ROMS: readonly BuiltInRom[] = [
     file: "superpong.ch8",
     author: "offstatic",
     origin: "chip8-archive",
-    controls: "W/S and A/D move the paddles, E restarts",
+    controls: "E starts, then W/S and A/D move the paddles",
     profile: { quirks: PRESETS.octo, cyclesPerFrame: 30 },
   },
   {
