@@ -12,9 +12,10 @@ export const CORE_FILES = [
   "src/disasm.ts",
 ];
 
-export default defineConfig(({ command }) => ({
-  // Deployed to GitHub Pages under /commit-to-curiosity/chip8/.
-  base: command === "build" ? "/commit-to-curiosity/chip8/" : "/",
+export default defineConfig(({ command, isPreview }) => ({
+  // Deployed to GitHub Pages under /commit-to-curiosity/chip8/. `npm run preview`
+  // serves the build at the same path; `npm run dev` stays at the root.
+  base: command === "build" || isPreview ? "/commit-to-curiosity/chip8/" : "/",
   build: { outDir: "dist", emptyOutDir: true },
   test: {
     include: ["tests/**/*.test.ts"],

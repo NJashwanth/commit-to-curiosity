@@ -567,3 +567,13 @@ input[type="color"] {
 .dbg-memory .i {
   outline: 1px solid var(--accent);
 }
+
+.rom-info {
+  margin: -4px 0 0;
+  min-height: 1.45em;
+  font-size: 14px;
+}
+
+.rom-info .by {
+  color: var(--muted);
+}

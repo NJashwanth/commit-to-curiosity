@@ -23,6 +23,7 @@
         </div>
 
         <div class="toolbar" role="toolbar" aria-label="Emulator controls">
+          <select id="rom-select" class="btn" aria-label="Built-in ROMs"></select>
           <label class="btn btn-file">
             Open ROM…
             <input id="rom-file" type="file" accept=".ch8,.c8,.rom,.bin" />
@@ -32,6 +33,7 @@
           <button id="btn-mute" class="btn" type="button" aria-pressed="false">Sound on</button>
         </div>
 
+        <p id="rom-info" class="rom-info"></p>
         <div id="keypad" class="keypad" aria-label="CHIP-8 keypad"></div>
         <p class="hint">Keyboard: <kbd>1234</kbd> <kbd>QWER</kbd> <kbd>ASDF</kbd> <kbd>ZXCV</kbd> · <kbd>P</kbd> pause · <kbd>M</kbd> mute</p>
       </section>

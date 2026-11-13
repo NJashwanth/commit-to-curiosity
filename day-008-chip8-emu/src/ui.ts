@@ -193,7 +193,8 @@ export class App {
     }
   }
 
-  private fail(err: unknown): void {
+  /** Stop and show an error on the screen and in the status line. */
+  fail(err: unknown): void {
     this.error = err instanceof Error ? err : new Error(String(err));
     this.state = "error";
     this.beeper.set(false);
