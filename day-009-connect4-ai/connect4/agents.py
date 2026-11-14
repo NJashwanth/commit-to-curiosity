@@ -78,6 +78,8 @@ LEVELS: dict[str, dict[str, dict]] = {
 
 def budget(agent: str, level: str) -> dict:
     """The keyword arguments a difficulty level gives an agent."""
+    from . import minimax  # noqa: F401  (registers its levels)
+
     if agent not in LEVELS:
         raise ValueError(f"unknown agent {agent!r} (choose from {', '.join(LEVELS)})")
     if level not in LEVEL_NAMES:
@@ -87,8 +89,12 @@ def budget(agent: str, level: str) -> dict:
 
 def make_agent(name: str, level: str = "medium", seed: int | None = None) -> Agent:
     """Build an agent by name at a difficulty level."""
+    from . import minimax  # noqa: F401  (imported here to register levels)
+
     kwargs = budget(name, level)
-    if name == "random":
-        agent: Agent = RandomAgent(seed=seed)
+    if name == "minimax":
+        agent: Agent = minimax.MinimaxAgent(**kwargs)
+    else:
+        agent = RandomAgent(seed=seed)
     agent.level = level  # type: ignore[attr-defined]
     return agent
