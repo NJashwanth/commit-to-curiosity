@@ -17,6 +17,7 @@ I'm learning AI, and I'm building alongside it. Some days the project uses AI, s
 | 006 | [git-wrapped](day-006-git-wrapped/) | | | |
 | 007 | [tiny-gpt](day-007-tiny-gpt/) | Python, PyTorch, matplotlib | Yes | A character-level GPT built from scratch with hand-written causal attention and trained on CPU in about 8 minutes; it cuts validation loss from 2.48 (bigram baseline) to 1.70 and writes Shakespeare-ish text with temperature and top-k sampling. |
 | 008 | [chip8-emu](day-008-chip8-emu/) | TypeScript, Vite, Canvas, Web Audio, vitest | No | A CHIP-8 emulator that runs in the browser: all 35 opcodes, quirk presets for VIP, Octo and SUPER-CHIP, 60Hz timers independent of CPU speed, touch keys, sound and a step debugger with disassembly, plus a hand-written demo ROM and 329 tests. |
+| 009 | [connect4-ai](day-009-connect4-ai/) | Python, bitboards, Textual, pytest | Yes | Connect Four on two 64-bit bitboards with three AIs (random, alpha-beta minimax with a transposition table and iterative deepening, and UCB1 MCTS), a Textual TUI with drop animation, hints, undo and live AI stats, and a 100-game Elo arena where MCTS edged minimax 18-15. |
 <!-- PROJECTS-END -->
 
 ## How it works
