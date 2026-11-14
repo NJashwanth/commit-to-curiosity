@@ -1,0 +1,27 @@
+[project]
+name = "connect4-ai"
+version = "0.1.0"
+description = "Connect Four on bitboards with minimax, MCTS, an Elo arena and a Textual TUI."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Jashwanth Neela" }]
+dependencies = ["textual>=0.80"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+
+[tool.setuptools]
+packages = ["connect4"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["connect4", "."]
+omit = ["tests/*", "tools/*", ".venv/*"]
+
+[tool.coverage.report]
+show_missing = true
