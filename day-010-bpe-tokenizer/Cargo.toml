@@ -1,0 +1,10 @@
+[package]
+name = "bpe-tokenizer"
+version = "0.1.0"
+edition = "2024"
+authors = ["Jashwanth Neela"]
+license = "MIT"
+description = "A byte-level BPE tokenizer (GPT-2/GPT-4 style) with train, encode, decode, viz and stats commands"
+publish = false
+
+[dependencies]
