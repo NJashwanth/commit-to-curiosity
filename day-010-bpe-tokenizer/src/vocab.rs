@@ -6,6 +6,8 @@
 
 use std::collections::HashMap;
 
+use crate::pretokenize::Pattern;
+
 /// Number of base tokens: one per possible byte value.
 pub const BASE_VOCAB_SIZE: usize = 256;
 
@@ -20,6 +22,9 @@ pub struct Vocab {
     merges: Vec<Pair>,
     /// Pair to rank, for encoding.
     ranks: HashMap<Pair, u32>,
+    /// The pre-tokenizer the merges were trained with. Encoding must use the
+    /// same one. `None` means the text was treated as one long chunk.
+    pattern: Option<Pattern>,
 }
 
 impl Vocab {
@@ -29,7 +34,17 @@ impl Vocab {
             tokens: (0..=255u8).map(|b| vec![b]).collect(),
             merges: Vec::new(),
             ranks: HashMap::new(),
+            pattern: None,
         }
+    }
+
+    /// The pre-tokenization pattern, if any.
+    pub fn pattern(&self) -> Option<Pattern> {
+        self.pattern
+    }
+
+    pub(crate) fn set_pattern(&mut self, pattern: Option<Pattern>) {
+        self.pattern = pattern;
     }
 
     /// Append a merge and return the id of the new token.
@@ -176,6 +191,14 @@ mod tests {
         assert_eq!(vocab.rank((116, 104)), Some(0));
         assert_eq!(vocab.rank((256, 101)), Some(1));
         assert_eq!(vocab.rank((101, 116)), None);
+    }
+
+    #[test]
+    fn pattern_defaults_to_none() {
+        let mut vocab = Vocab::byte_level();
+        assert_eq!(vocab.pattern(), None);
+        vocab.set_pattern(Some(Pattern::Gpt4));
+        assert_eq!(vocab.pattern(), Some(Pattern::Gpt4));
     }
 
     #[test]

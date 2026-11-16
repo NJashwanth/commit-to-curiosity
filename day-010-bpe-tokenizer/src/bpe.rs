@@ -16,7 +16,10 @@ use std::time::{Duration, Instant};
 
 use indicatif::{ProgressBar, ProgressStyle};
 
+use fancy_regex::Regex;
+
 use crate::Error;
+use crate::pretokenize::{self, Pattern};
 use crate::vocab::{BASE_VOCAB_SIZE, Pair, Vocab};
 
 /// Settings for [`train`].
@@ -24,6 +27,8 @@ use crate::vocab::{BASE_VOCAB_SIZE, Pair, Vocab};
 pub struct TrainOptions {
     /// Final vocabulary size, including the 256 byte tokens.
     pub vocab_size: usize,
+    /// Pre-tokenization pattern; `None` trains on the raw text as one chunk.
+    pub pattern: Option<Pattern>,
     /// Draw a progress bar on stderr.
     pub progress: bool,
 }
@@ -32,6 +37,7 @@ impl Default for TrainOptions {
     fn default() -> Self {
         Self {
             vocab_size: 1024,
+            pattern: Some(Pattern::Gpt4),
             progress: false,
         }
     }
@@ -60,8 +66,10 @@ impl TrainReport {
 
 /// Learn a vocabulary of `opts.vocab_size` tokens from `text`.
 ///
-/// Ties between equally frequent pairs go to the smallest pair `(a, b)`,
-/// compared by `a` and then `b`, so training is fully deterministic.
+/// The text is pre-tokenized first (unless `opts.pattern` is `None`) and pairs
+/// are only counted inside a piece. Ties between equally frequent pairs go to
+/// the smallest pair `(a, b)`, compared by `a` and then `b`, so training is
+/// fully deterministic.
 pub fn train(text: &str, opts: &TrainOptions) -> Result<(Vocab, TrainReport), Error> {
     if opts.vocab_size < BASE_VOCAB_SIZE {
         return Err(Error::VocabTooSmall {
@@ -71,10 +79,15 @@ pub fn train(text: &str, opts: &TrainOptions) -> Result<(Vocab, TrainReport), Er
     }
     let start = Instant::now();
     let requested_merges = opts.vocab_size - BASE_VOCAB_SIZE;
-    let chunks = count_chunks(std::iter::once(text));
+    let pieces = match opts.pattern {
+        Some(p) => pretokenize::split(&p.regex(), text),
+        None => vec![text],
+    };
+    let chunks = count_chunks(pieces.into_iter());
     let merges = learn_merges(&chunks, requested_merges, opts.progress);
 
     let mut vocab = Vocab::byte_level();
+    vocab.set_pattern(opts.pattern);
     for &(a, b) in &merges {
         vocab.push_merge(a, b);
     }
@@ -261,11 +274,13 @@ pub struct Decoded {
 #[derive(Clone, Debug)]
 pub struct Tokenizer {
     vocab: Vocab,
+    split: Option<Regex>,
 }
 
 impl Tokenizer {
     pub fn new(vocab: Vocab) -> Self {
-        Self { vocab }
+        let split = vocab.pattern().map(Pattern::regex);
+        Self { vocab, split }
     }
 
     pub fn vocab(&self) -> &Vocab {
@@ -275,8 +290,27 @@ impl Tokenizer {
     /// Encode text to token ids.
     pub fn encode(&self, text: &str) -> Vec<u32> {
         let mut out = Vec::new();
-        self.encode_chunk(text.as_bytes(), &mut out);
+        self.encode_text(text, &mut out);
         out
+    }
+
+    /// Pre-tokenize and encode each piece. Natural text repeats the same
+    /// words constantly, so each distinct piece is encoded only once.
+    fn encode_text(&self, text: &str, out: &mut Vec<u32>) {
+        let Some(re) = &self.split else {
+            self.encode_chunk(text.as_bytes(), out);
+            return;
+        };
+        let mut cache: HashMap<&str, Vec<u32>> = HashMap::new();
+        for piece in pretokenize::split(re, text) {
+            if let Some(ids) = cache.get(piece) {
+                out.extend_from_slice(ids);
+                continue;
+            }
+            let start = out.len();
+            self.encode_chunk(piece.as_bytes(), out);
+            cache.insert(piece, out[start..].to_vec());
+        }
     }
 
     /// Apply merges to one chunk by rank, lowest first. Equal ranks (the same
@@ -573,6 +607,7 @@ pub(crate) mod tests {
             &TrainOptions {
                 vocab_size: 300,
                 progress: true,
+                ..Default::default()
             },
         )
         .unwrap()
@@ -631,27 +666,115 @@ pub(crate) mod tests {
         assert!(tok.encode("").is_empty());
     }
 
+    /// Reference for a whole text: split with the tokenizer's pattern, then
+    /// encode each piece naively.
+    pub(crate) fn naive_encode_text(tok: &Tokenizer, text: &str) -> Vec<u32> {
+        let pieces = match &tok.split {
+            Some(re) => pretokenize::split(re, text),
+            None => vec![text],
+        };
+        pieces
+            .iter()
+            .flat_map(|piece| naive_encode(tok.vocab(), piece.as_bytes()))
+            .collect()
+    }
+
+    fn trained_with(vocab_size: usize, pattern: Option<Pattern>) -> Tokenizer {
+        let opts = TrainOptions {
+            vocab_size,
+            pattern,
+            ..Default::default()
+        };
+        Tokenizer::new(train(&CORPUS.repeat(3), &opts).unwrap().0)
+    }
+
     #[test]
     fn heap_encoder_matches_the_naive_encoder() {
-        let tok = trained(500);
-        let mut rng = Lcg(7);
         let pieces = [
             "speak", " ", "resolved", "👋", "నమ", "aa", "e", ".\n", "Citizen",
         ];
-        for _ in 0..300 {
-            let text: String = (0..rng.below(12))
-                .map(|_| pieces[rng.below(9) as usize])
-                .collect();
-            assert_eq!(
-                tok.encode(&text),
-                naive_encode(tok.vocab(), text.as_bytes()),
-                "{text:?}"
-            );
+        for pattern in [Some(Pattern::Gpt4), Some(Pattern::Gpt2), None] {
+            let tok = trained_with(500, pattern);
+            let mut rng = Lcg(7);
+            for _ in 0..300 {
+                let text: String = (0..rng.below(12))
+                    .map(|_| pieces[rng.below(9) as usize])
+                    .collect();
+                assert_eq!(
+                    tok.encode(&text),
+                    naive_encode_text(&tok, &text),
+                    "{text:?}"
+                );
+            }
+            assert_eq!(tok.encode(CORPUS), naive_encode_text(&tok, CORPUS));
         }
+    }
+
+    /// Byte offsets where each token ends.
+    fn token_ends(tok: &Tokenizer, ids: &[u32]) -> Vec<usize> {
+        let mut end = 0;
+        ids.iter()
+            .map(|&id| {
+                end += tok.vocab().token_bytes(id).unwrap().len();
+                end
+            })
+            .collect()
+    }
+
+    #[test]
+    fn learned_tokens_never_cross_split_boundaries() {
+        let re = Pattern::Gpt4.regex();
+        let crosses = |tok: &Tokenizer| {
+            (BASE_VOCAB_SIZE as u32..tok.vocab().len() as u32)
+                .filter_map(|id| std::str::from_utf8(tok.vocab().token_bytes(id).unwrap()).ok())
+                .filter(|t| pretokenize::split(&re, t).len() > 1)
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        };
+        let split = trained_with(600, Some(Pattern::Gpt4));
+        assert_eq!(crosses(&split), Vec::<String>::new());
+        // Without pre-tokenization BPE glues words and punctuation together.
+        let raw = trained_with(600, None);
+        let glued = crosses(&raw);
+        assert!(glued.iter().any(|t| t.contains(": ")), "{glued:?}");
+    }
+
+    #[test]
+    fn encoding_respects_split_boundaries() {
+        let tok = trained_with(600, Some(Pattern::Gpt4));
+        let text = "First Citizen: speak, speak. You are all resolved!";
+        let ids = tok.encode(text);
+        let ends = token_ends(&tok, &ids);
+        let mut boundary = 0;
+        for piece in pretokenize::split(&Pattern::Gpt4.regex(), text) {
+            boundary += piece.len();
+            assert!(ends.contains(&boundary), "no token ends after {piece:?}");
+        }
+    }
+
+    #[test]
+    fn the_pattern_is_stored_in_the_vocab() {
+        assert_eq!(trained_with(300, None).vocab().pattern(), None);
         assert_eq!(
-            tok.encode(CORPUS),
-            naive_encode(tok.vocab(), CORPUS.as_bytes())
+            trained_with(300, Some(Pattern::Gpt2)).vocab().pattern(),
+            Some(Pattern::Gpt2)
         );
+        let opts = TrainOptions {
+            vocab_size: 300,
+            pattern: None,
+            ..Default::default()
+        };
+        let text = "to be or not to be";
+        let split = train(
+            text,
+            &TrainOptions {
+                vocab_size: 300,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(split.1.unique_chunks, 5); // "to", " be", " or", " not", " to"
+        assert_eq!(train(text, &opts).unwrap().1.unique_chunks, 1);
     }
 
     #[test]

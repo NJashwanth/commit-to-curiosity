@@ -7,9 +7,11 @@
 use std::fmt;
 
 pub mod bpe;
+pub mod pretokenize;
 pub mod vocab;
 
 pub use bpe::{Decoded, Tokenizer, TrainOptions, TrainReport, train};
+pub use pretokenize::Pattern;
 pub use vocab::{BASE_VOCAB_SIZE, Vocab};
 
 /// Everything that can go wrong in the library.
