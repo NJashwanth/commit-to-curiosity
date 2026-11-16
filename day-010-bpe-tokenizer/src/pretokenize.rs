@@ -75,6 +75,54 @@ pub fn split<'t>(re: &Regex, text: &'t str) -> Vec<&'t str> {
     pieces
 }
 
+/// A run of text, or one occurrence of a special token.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Segment<'t> {
+    Text(&'t str),
+    Special(&'t str),
+}
+
+/// A regex matching any of the special tokens literally, longest first so
+/// that `<|endoftext|>` wins over a shorter token that is a prefix of it.
+/// `None` when there are no special tokens.
+pub fn special_regex<S: AsRef<str>>(tokens: &[S]) -> Option<Regex> {
+    if tokens.is_empty() {
+        return None;
+    }
+    let mut sorted: Vec<&str> = tokens.iter().map(AsRef::as_ref).collect();
+    sorted.sort_by(|a, b| b.len().cmp(&a.len()).then(a.cmp(b)));
+    let alternation: Vec<String> = sorted
+        .iter()
+        .map(|t| fancy_regex::escape(t).into_owned())
+        .collect();
+    Some(Regex::new(&alternation.join("|")).expect("escaped literals form a valid regex"))
+}
+
+/// Cut `text` around special tokens. Empty text runs are dropped.
+pub fn split_specials<'t>(re: Option<&Regex>, text: &'t str) -> Vec<Segment<'t>> {
+    let Some(re) = re else {
+        return if text.is_empty() {
+            vec![]
+        } else {
+            vec![Segment::Text(text)]
+        };
+    };
+    let mut segments = Vec::new();
+    let mut last = 0;
+    // Literal alternations never backtrack, so matching cannot fail.
+    for m in re.find_iter(text).flatten() {
+        if m.start() > last {
+            segments.push(Segment::Text(&text[last..m.start()]));
+        }
+        segments.push(Segment::Special(m.as_str()));
+        last = m.end();
+    }
+    if last < text.len() {
+        segments.push(Segment::Text(&text[last..]));
+    }
+    segments
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -192,5 +240,43 @@ mod tests {
             assert!(!p.source().is_empty());
         }
         assert_eq!(Pattern::from_name("gpt5"), None);
+    }
+
+    #[test]
+    fn special_tokens_are_cut_out_whole() {
+        let re = special_regex(&["<|endoftext|>", "<|end|>"]).unwrap();
+        use Segment::{Special, Text};
+        assert_eq!(
+            split_specials(Some(&re), "a<|endoftext|>b<|end|><|end|>"),
+            [
+                Text("a"),
+                Special("<|endoftext|>"),
+                Text("b"),
+                Special("<|end|>"),
+                Special("<|end|>")
+            ]
+        );
+        assert_eq!(
+            split_specials(Some(&re), "<|endoftext|>"),
+            [Special("<|endoftext|>")]
+        );
+        assert_eq!(split_specials(Some(&re), "<|endof"), [Text("<|endof")]);
+        assert_eq!(split_specials(Some(&re), ""), []);
+        assert_eq!(split_specials(None, "x<|end|>"), [Text("x<|end|>")]);
+        assert_eq!(split_specials(None, ""), []);
+    }
+
+    #[test]
+    fn regex_metacharacters_in_special_tokens_are_literal() {
+        let re = special_regex(&["[MASK]", "a.b"]).unwrap();
+        assert_eq!(
+            split_specials(Some(&re), "[MASK] axb a.b"),
+            [
+                Segment::Special("[MASK]"),
+                Segment::Text(" axb "),
+                Segment::Special("a.b")
+            ]
+        );
+        assert!(special_regex::<&str>(&[]).is_none());
     }
 }

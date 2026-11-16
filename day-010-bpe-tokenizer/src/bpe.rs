@@ -19,16 +19,20 @@ use indicatif::{ProgressBar, ProgressStyle};
 use fancy_regex::Regex;
 
 use crate::Error;
-use crate::pretokenize::{self, Pattern};
-use crate::vocab::{BASE_VOCAB_SIZE, Pair, Vocab};
+use crate::pretokenize::{self, Pattern, Segment};
+use crate::vocab::{self, BASE_VOCAB_SIZE, Pair, Vocab};
 
 /// Settings for [`train`].
 #[derive(Clone, Debug)]
 pub struct TrainOptions {
-    /// Final vocabulary size, including the 256 byte tokens.
+    /// Final vocabulary size, including the 256 byte tokens and the special
+    /// tokens.
     pub vocab_size: usize,
     /// Pre-tokenization pattern; `None` trains on the raw text as one chunk.
     pub pattern: Option<Pattern>,
+    /// Tokens like `<|endoftext|>`. They are removed from the training text,
+    /// so no merge ever touches them, and get the last ids of the vocab.
+    pub special_tokens: Vec<String>,
     /// Draw a progress bar on stderr.
     pub progress: bool,
 }
@@ -38,6 +42,7 @@ impl Default for TrainOptions {
         Self {
             vocab_size: 1024,
             pattern: Some(Pattern::Gpt4),
+            special_tokens: Vec::new(),
             progress: false,
         }
     }
@@ -71,18 +76,28 @@ impl TrainReport {
 /// the smallest pair `(a, b)`, compared by `a` and then `b`, so training is
 /// fully deterministic.
 pub fn train(text: &str, opts: &TrainOptions) -> Result<(Vocab, TrainReport), Error> {
-    if opts.vocab_size < BASE_VOCAB_SIZE {
+    let minimum = BASE_VOCAB_SIZE + opts.special_tokens.len();
+    if opts.vocab_size < minimum {
         return Err(Error::VocabTooSmall {
             requested: opts.vocab_size,
-            minimum: BASE_VOCAB_SIZE,
+            minimum,
         });
     }
+    vocab::validate_specials(&opts.special_tokens)?;
     let start = Instant::now();
-    let requested_merges = opts.vocab_size - BASE_VOCAB_SIZE;
-    let pieces = match opts.pattern {
-        Some(p) => pretokenize::split(&p.regex(), text),
-        None => vec![text],
-    };
+    let requested_merges = opts.vocab_size - minimum;
+
+    let specials = pretokenize::special_regex(&opts.special_tokens);
+    let split = opts.pattern.map(Pattern::regex);
+    let mut pieces = Vec::new();
+    for segment in pretokenize::split_specials(specials.as_ref(), text) {
+        if let Segment::Text(run) = segment {
+            match &split {
+                Some(re) => pieces.extend(pretokenize::split(re, run)),
+                None => pieces.push(run),
+            }
+        }
+    }
     let chunks = count_chunks(pieces.into_iter());
     let merges = learn_merges(&chunks, requested_merges, opts.progress);
 
@@ -90,6 +105,9 @@ pub fn train(text: &str, opts: &TrainOptions) -> Result<(Vocab, TrainReport), Er
     vocab.set_pattern(opts.pattern);
     for &(a, b) in &merges {
         vocab.push_merge(a, b);
+    }
+    for token in &opts.special_tokens {
+        vocab.add_special(token)?;
     }
     let report = TrainReport {
         merges: merges.len(),
@@ -275,33 +293,61 @@ pub struct Decoded {
 pub struct Tokenizer {
     vocab: Vocab,
     split: Option<Regex>,
+    specials: Option<Regex>,
 }
 
 impl Tokenizer {
     pub fn new(vocab: Vocab) -> Self {
         let split = vocab.pattern().map(Pattern::regex);
-        Self { vocab, split }
+        let names: Vec<&str> = vocab.special_tokens().map(|(_, s)| s).collect();
+        let specials = pretokenize::special_regex(&names);
+        Self {
+            vocab,
+            split,
+            specials,
+        }
     }
 
     pub fn vocab(&self) -> &Vocab {
         &self.vocab
     }
 
-    /// Encode text to token ids.
+    /// Encode text to token ids. Special tokens in the text become their
+    /// reserved ids and are never split.
     pub fn encode(&self, text: &str) -> Vec<u32> {
         let mut out = Vec::new();
-        self.encode_text(text, &mut out);
+        let mut cache = HashMap::new();
+        for segment in pretokenize::split_specials(self.specials.as_ref(), text) {
+            match segment {
+                Segment::Special(s) => {
+                    out.push(self.vocab.special_id(s).expect("matched a known special"))
+                }
+                Segment::Text(run) => self.encode_text(run, &mut cache, &mut out),
+            }
+        }
+        out
+    }
+
+    /// Encode text treating special token strings as ordinary text. Useful
+    /// for untrusted input that should not be able to inject control tokens.
+    pub fn encode_ordinary(&self, text: &str) -> Vec<u32> {
+        let mut out = Vec::new();
+        self.encode_text(text, &mut HashMap::new(), &mut out);
         out
     }
 
     /// Pre-tokenize and encode each piece. Natural text repeats the same
     /// words constantly, so each distinct piece is encoded only once.
-    fn encode_text(&self, text: &str, out: &mut Vec<u32>) {
+    fn encode_text<'t>(
+        &self,
+        text: &'t str,
+        cache: &mut HashMap<&'t str, Vec<u32>>,
+        out: &mut Vec<u32>,
+    ) {
         let Some(re) = &self.split else {
             self.encode_chunk(text.as_bytes(), out);
             return;
         };
-        let mut cache: HashMap<&str, Vec<u32>> = HashMap::new();
         for piece in pretokenize::split(re, text) {
             if let Some(ids) = cache.get(piece) {
                 out.extend_from_slice(ids);
@@ -817,5 +863,141 @@ pub(crate) mod tests {
             .unwrap();
         assert_eq!((decoded.text.as_str(), decoded.lossy), ("o\u{FFFD}k", true));
         assert_eq!(tok.decode_bytes(&[0xF0, 0x9F]).unwrap(), vec![0xF0, 0x9F]);
+    }
+
+    // ---- special tokens ----
+
+    const EOT: &str = "<|endoftext|>";
+
+    fn with_specials(vocab_size: usize, specials: &[&str]) -> Tokenizer {
+        let opts = TrainOptions {
+            vocab_size,
+            special_tokens: specials.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        };
+        let text = format!("{CORPUS}{EOT}").repeat(3);
+        Tokenizer::new(train(&text, &opts).unwrap().0)
+    }
+
+    #[test]
+    fn special_tokens_get_the_last_reserved_ids() {
+        let tok = with_specials(300, &[EOT, "<|pad|>"]);
+        let vocab = tok.vocab();
+        assert_eq!(vocab.len(), 300);
+        assert_eq!(vocab.merges().len(), 300 - 256 - 2);
+        assert_eq!(vocab.special_id(EOT), Some(298));
+        assert_eq!(vocab.special_id("<|pad|>"), Some(299));
+        assert_eq!(vocab.special_id("<|nope|>"), None);
+        assert_eq!(
+            vocab.special_tokens().collect::<Vec<_>>(),
+            [(298, EOT), (299, "<|pad|>")]
+        );
+        assert!(vocab.is_special(298) && vocab.is_special(299));
+        assert!(!vocab.is_special(297) && !vocab.is_special(300));
+        assert_eq!(vocab.token_bytes(298), Some(EOT.as_bytes()));
+        assert_eq!(vocab.token_bytes(300), None);
+    }
+
+    #[test]
+    fn special_tokens_stay_intact_when_encoding() {
+        let tok = with_specials(400, &[EOT, "<|end|>"]);
+        let eot = tok.vocab().special_id(EOT).unwrap();
+        let end = tok.vocab().special_id("<|end|>").unwrap();
+        for (text, expected_specials) in [
+            ("Hello world<|endoftext|>speak", vec![eot]),
+            ("<|endoftext|>", vec![eot]),
+            ("<|endoftext|><|endoftext|><|end|>", vec![eot, eot, end]),
+            ("a<|end|>b<|endoftext|>", vec![end, eot]),
+            ("almost <|endof and <|end", vec![]),
+        ] {
+            let ids = tok.encode(text);
+            let found: Vec<u32> = ids
+                .iter()
+                .copied()
+                .filter(|&id| tok.vocab().is_special(id))
+                .collect();
+            assert_eq!(found, expected_specials, "{text:?}");
+            assert_eq!(tok.decode(&ids).unwrap().text, text);
+        }
+        assert_eq!(tok.encode(EOT), vec![eot]);
+    }
+
+    #[test]
+    fn encode_ordinary_treats_special_strings_as_text() {
+        let tok = with_specials(400, &[EOT]);
+        let ids = tok.encode_ordinary("hi<|endoftext|>");
+        assert!(ids.iter().all(|&id| !tok.vocab().is_special(id)));
+        assert!(ids.len() > 1);
+        assert_eq!(tok.decode(&ids).unwrap().text, "hi<|endoftext|>");
+    }
+
+    #[test]
+    fn special_tokens_are_left_out_of_training() {
+        let opts = TrainOptions {
+            vocab_size: 300,
+            special_tokens: vec![EOT.into()],
+            ..Default::default()
+        };
+        // Without removal, "<|", "endoftext" and "|>" would be the top merges.
+        let text = format!("ab{EOT}").repeat(50);
+        let (vocab, report) = train(&text, &opts).unwrap();
+        for id in BASE_VOCAB_SIZE as u32..vocab.len() as u32 - 1 {
+            let bytes = vocab.token_bytes(id).unwrap();
+            assert!(
+                !bytes.contains(&b'|') && !bytes.contains(&b'<'),
+                "{bytes:?}"
+            );
+        }
+        assert_eq!(vocab.merges(), &[(97, 98)]);
+        assert!(report.stopped_early());
+        assert_eq!(vocab.special_id(EOT), Some(257));
+    }
+
+    #[test]
+    fn bad_special_tokens_are_rejected() {
+        let opts = |specials: &[&str], vocab_size| TrainOptions {
+            vocab_size,
+            special_tokens: specials.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        };
+        let err = train("x", &opts(&[""], 300)).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "invalid special token: special tokens cannot be empty"
+        );
+        let err = train("x", &opts(&[EOT, EOT], 300)).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "invalid special token: \"<|endoftext|>\" is listed twice"
+        );
+        let err = train("x", &opts(&[EOT], 256)).unwrap_err();
+        assert!(matches!(
+            err,
+            Error::VocabTooSmall {
+                requested: 256,
+                minimum: 257
+            }
+        ));
+    }
+
+    #[test]
+    fn save_then_load_gives_identical_encodings() {
+        let dir = tempfile::tempdir().unwrap();
+        for pattern in [Some(Pattern::Gpt4), Some(Pattern::Gpt2), None] {
+            let opts = TrainOptions {
+                vocab_size: 500,
+                pattern,
+                special_tokens: vec![EOT.into()],
+                ..Default::default()
+            };
+            let (vocab, _) = train(&CORPUS.repeat(2), &opts).unwrap();
+            let path = dir.path().join("vocab.json");
+            vocab.save(&path).unwrap();
+            let loaded = Vocab::load(&path).unwrap();
+            assert_eq!(loaded, vocab);
+            let (a, b) = (Tokenizer::new(vocab), Tokenizer::new(loaded));
+            let text = format!("{CORPUS}{EOT} Hello 👋 నమస్తే");
+            assert_eq!(a.encode(&text), b.encode(&text));
+        }
     }
 }
