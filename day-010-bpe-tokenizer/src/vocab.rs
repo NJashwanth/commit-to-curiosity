@@ -1,15 +1,25 @@
-//! The vocabulary: token id to bytes.
+//! The vocabulary: token id to bytes, plus the ordered list of merges.
 //!
-//! Ids `0..256` are the raw byte values. Every learned merge adds one token
-//! whose bytes are the concatenation of the two tokens it merges.
+//! Ids `0..256` are the raw byte values. Merge number `r` (its rank) creates
+//! token `256 + r`, whose bytes are the concatenation of the two tokens it
+//! merges. A lower rank means the merge was learned earlier.
+
+use std::collections::HashMap;
 
 /// Number of base tokens: one per possible byte value.
 pub const BASE_VOCAB_SIZE: usize = 256;
+
+/// Two adjacent token ids.
+pub type Pair = (u32, u32);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Vocab {
     /// Bytes for every regular token, indexed by id.
     tokens: Vec<Vec<u8>>,
+    /// Merges in the order they were learned.
+    merges: Vec<Pair>,
+    /// Pair to rank, for encoding.
+    ranks: HashMap<Pair, u32>,
 }
 
 impl Vocab {
@@ -17,7 +27,38 @@ impl Vocab {
     pub fn byte_level() -> Self {
         Self {
             tokens: (0..=255u8).map(|b| vec![b]).collect(),
+            merges: Vec::new(),
+            ranks: HashMap::new(),
         }
+    }
+
+    /// Append a merge and return the id of the new token.
+    ///
+    /// Both ids must already exist and the pair must not be merged already.
+    pub(crate) fn push_merge(&mut self, a: u32, b: u32) -> u32 {
+        let id = self.tokens.len() as u32;
+        assert!(
+            a < id && b < id,
+            "merge ({a}, {b}) refers to an unknown token"
+        );
+        let rank = self.merges.len() as u32;
+        let previous = self.ranks.insert((a, b), rank);
+        assert!(previous.is_none(), "pair ({a}, {b}) is already merged");
+        let mut bytes = self.tokens[a as usize].clone();
+        bytes.extend_from_slice(&self.tokens[b as usize]);
+        self.tokens.push(bytes);
+        self.merges.push((a, b));
+        id
+    }
+
+    /// The merges in rank order. Merge `r` produced token `256 + r`.
+    pub fn merges(&self) -> &[Pair] {
+        &self.merges
+    }
+
+    /// The rank of a pair, if it was merged.
+    pub fn rank(&self, pair: Pair) -> Option<u32> {
+        self.ranks.get(&pair).copied()
     }
 
     /// Total number of token ids.
@@ -121,6 +162,34 @@ mod tests {
         assert_eq!(escape_bytes(&[0xF0, 0x9F]), "\\xF0\\x9F");
         assert_eq!(escape_bytes("👋".as_bytes()), "👋");
         assert_eq!(escape_bytes(&[b'h', 0xFF, b'i']), "h\\xFFi");
+    }
+
+    #[test]
+    fn push_merge_concatenates_bytes_and_records_rank() {
+        let mut vocab = Vocab::byte_level();
+        let th = vocab.push_merge(u32::from(b't'), u32::from(b'h'));
+        let the = vocab.push_merge(th, u32::from(b'e'));
+        assert_eq!((th, the), (256, 257));
+        assert_eq!(vocab.len(), 258);
+        assert_eq!(vocab.token_bytes(the), Some(&b"the"[..]));
+        assert_eq!(vocab.merges(), &[(116, 104), (256, 101)]);
+        assert_eq!(vocab.rank((116, 104)), Some(0));
+        assert_eq!(vocab.rank((256, 101)), Some(1));
+        assert_eq!(vocab.rank((101, 116)), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "unknown token")]
+    fn push_merge_rejects_unknown_ids() {
+        Vocab::byte_level().push_merge(0, 999);
+    }
+
+    #[test]
+    #[should_panic(expected = "already merged")]
+    fn push_merge_rejects_duplicates() {
+        let mut vocab = Vocab::byte_level();
+        vocab.push_merge(1, 2);
+        vocab.push_merge(1, 2);
     }
 
     #[test]

@@ -8,3 +8,4 @@ description = "A byte-level BPE tokenizer (GPT-2/GPT-4 style) with train, encode
 publish = false
 
 [dependencies]
+indicatif = "0.17"
