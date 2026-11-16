@@ -8,6 +8,7 @@ description = "A byte-level BPE tokenizer (GPT-2/GPT-4 style) with train, encode
 publish = false
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 fancy-regex = "0.14"
 indicatif = "0.17"
 serde = { version = "1", features = ["derive"] }
@@ -15,3 +16,7 @@ serde_json = "1"
 
 [dev-dependencies]
 tempfile = "3"
+
+[[bin]]
+name = "bpe"
+path = "src/main.rs"

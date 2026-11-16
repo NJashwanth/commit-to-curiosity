@@ -7,6 +7,7 @@
 use std::{fmt, io};
 
 pub mod bpe;
+pub mod cli;
 pub mod pretokenize;
 pub mod vocab;
 
