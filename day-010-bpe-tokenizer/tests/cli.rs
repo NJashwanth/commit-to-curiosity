@@ -68,7 +68,7 @@ fn errors_exit_with_status_one() {
 fn help_succeeds_and_bad_usage_fails() {
     let help = bpe(&["--help"]);
     assert!(help.status.success());
-    for cmd in ["train", "encode", "decode", "viz"] {
+    for cmd in ["train", "encode", "decode", "viz", "stats"] {
         assert!(stdout(&help).contains(cmd), "help lists {cmd}");
     }
     let bad = bpe(&["encode"]);

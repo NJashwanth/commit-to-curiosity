@@ -1,4 +1,4 @@
-//! The `bpe` command line: train, encode, decode and viz.
+//! The `bpe` command line: train, encode, decode, viz and stats.
 //!
 //! [`run`] takes its arguments and streams as parameters so the whole CLI
 //! can be exercised from tests without spawning a process.
@@ -8,6 +8,7 @@ use std::fmt;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -35,6 +36,8 @@ enum Command {
     Decode(DecodeArgs),
     /// Show how text splits into tokens, with colours and ids
     Viz(VizArgs),
+    /// Measure compression, vocab usage and encode speed on a text file
+    Stats(StatsArgs),
 }
 
 #[derive(Args, Debug)]
@@ -127,6 +130,19 @@ struct VizArgs {
     no_color: bool,
 }
 
+#[derive(Args, Debug)]
+struct StatsArgs {
+    /// Vocab JSON written by `train`
+    #[arg(long)]
+    vocab: PathBuf,
+    /// Text file to encode
+    #[arg(long)]
+    input: PathBuf,
+    /// How many of the longest tokens to list
+    #[arg(long, default_value_t = 20)]
+    top: usize,
+}
+
 /// Why the CLI stopped.
 #[derive(Debug)]
 pub enum CliError {
@@ -179,6 +195,7 @@ where
         Command::Encode(args) => cmd_encode(&args, stdin, out),
         Command::Decode(args) => cmd_decode(&args, stdin, out, err),
         Command::Viz(args) => cmd_viz(&args, stdin, out),
+        Command::Stats(args) => cmd_stats(&args, out),
     }
 }
 
@@ -403,6 +420,137 @@ fn cmd_viz(args: &VizArgs, stdin: &mut dyn Read, out: &mut dyn Write) -> Result<
     let tok = load_tokenizer(&args.vocab)?;
     let text = read_input(&args.input, stdin)?;
     write!(out, "{}", render_viz(&tok, &text, !args.no_color))?;
+    Ok(())
+}
+
+/// How often encoding is timed; the fastest run is reported.
+const TIMING_RUNS: usize = 3;
+
+/// The numbers `stats` reports.
+#[derive(Debug)]
+pub(crate) struct Stats {
+    pub bytes: usize,
+    pub tokens: usize,
+    /// Distinct token ids that appear in the encoding.
+    pub used: usize,
+    pub vocab_size: usize,
+    /// Fastest of the timed encodes.
+    pub encode_time: Duration,
+    pub round_trip: bool,
+    /// `(id, byte length, occurrences in the text)`, longest first.
+    pub longest: Vec<(u32, usize, usize)>,
+}
+
+impl Stats {
+    pub fn bytes_per_token(&self) -> f64 {
+        if self.tokens == 0 {
+            0.0
+        } else {
+            self.bytes as f64 / self.tokens as f64
+        }
+    }
+
+    pub fn megabytes_per_second(&self) -> f64 {
+        let secs = self.encode_time.as_secs_f64().max(1e-9);
+        self.bytes as f64 / 1e6 / secs
+    }
+}
+
+pub(crate) fn compute_stats(tok: &Tokenizer, text: &str, top: usize) -> Stats {
+    let mut ids = Vec::new();
+    let mut encode_time = Duration::MAX;
+    for _ in 0..TIMING_RUNS {
+        let start = Instant::now();
+        ids = tok.encode(text);
+        encode_time = encode_time.min(start.elapsed());
+    }
+    let vocab = tok.vocab();
+    let mut counts = vec![0usize; vocab.len()];
+    for &id in &ids {
+        counts[id as usize] += 1;
+    }
+    let round_trip = tok.decode(&ids).is_ok_and(|d| d.text == text);
+
+    let mut by_length: Vec<(u32, usize)> = (0..vocab.len() as u32)
+        .filter(|&id| !vocab.is_special(id))
+        .map(|id| (id, vocab.token_bytes(id).expect("id in range").len()))
+        .collect();
+    by_length.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let longest = by_length
+        .into_iter()
+        .take(top)
+        .map(|(id, len)| (id, len, counts[id as usize]))
+        .collect();
+
+    Stats {
+        bytes: text.len(),
+        tokens: ids.len(),
+        used: counts.iter().filter(|&&c| c > 0).count(),
+        vocab_size: vocab.len(),
+        encode_time,
+        round_trip,
+        longest,
+    }
+}
+
+pub(crate) fn render_stats(tok: &Tokenizer, stats: &Stats) -> String {
+    let vocab = tok.vocab();
+    let pattern = vocab.pattern().map_or("none", Pattern::name);
+    let mut out = String::new();
+    let mut row = |label: &str, value: String| out.push_str(&format!("{label:<15}{value}\n"));
+    row(
+        "vocab",
+        format!("{} (pre-tokenization: {pattern})", describe(vocab)),
+    );
+    row("bytes", group_digits(stats.bytes));
+    row("tokens", group_digits(stats.tokens));
+    row("bytes/token", format!("{:.2}", stats.bytes_per_token()));
+    row(
+        "vocab used",
+        format!(
+            "{} of {} tokens ({:.1}%)",
+            group_digits(stats.used),
+            group_digits(stats.vocab_size),
+            100.0 * stats.used as f64 / stats.vocab_size as f64
+        ),
+    );
+    row(
+        "encode speed",
+        format!(
+            "{:.1} MB/s ({:.1} ms, best of {TIMING_RUNS})",
+            stats.megabytes_per_second(),
+            stats.encode_time.as_secs_f64() * 1e3
+        ),
+    );
+    row(
+        "round trip",
+        if stats.round_trip { "ok" } else { "FAILED" }.to_owned(),
+    );
+    if !stats.longest.is_empty() {
+        out.push_str(&format!("\n{} longest tokens:\n", stats.longest.len()));
+        out.push_str(&format!(
+            "{:>6} {:>6} {:>8}  token\n",
+            "id", "bytes", "count"
+        ));
+        for &(id, len, count) in &stats.longest {
+            let token = vocab.display_token(id).expect("id in range");
+            // `display_token` already escapes newlines etc.; just quote it so
+            // leading and trailing spaces are visible.
+            out.push_str(&format!(
+                "{id:>6} {len:>6} {:>8}  \"{token}\"\n",
+                group_digits(count)
+            ));
+        }
+    }
+    out
+}
+
+fn cmd_stats(args: &StatsArgs, out: &mut dyn Write) -> Result<(), CliError> {
+    let tok = load_tokenizer(&args.vocab)?;
+    let text = read_text_file(&args.input)?;
+    let stats = compute_stats(&tok, &text, args.top);
+    writeln!(out, "{:<15}{}", "input", args.input.display())?;
+    write!(out, "{}", render_stats(&tok, &stats))?;
     Ok(())
 }
 
@@ -776,6 +924,82 @@ mod tests {
         let err = run(args, &mut io::empty(), &mut Broken, &mut Vec::new()).unwrap_err();
         assert!(matches!(err, CliError::Io(_)));
         assert_eq!(err.to_string(), "stdout closed");
+    }
+
+    #[test]
+    fn stats_reports_compression_usage_and_longest_tokens() {
+        let (dir, v) = setup(&[]);
+        let input = dir.path().join("input.txt");
+        let out = ok(&[
+            "stats",
+            "--vocab",
+            &v,
+            "--input",
+            input.to_str().unwrap(),
+            "--top",
+            "5",
+        ]);
+        assert!(out.starts_with("input          "), "{out}");
+        assert!(out.contains(
+            "vocab          300 tokens = 256 bytes + 43 merges + 1 special (pre-tokenization: gpt4)"
+        ));
+        assert!(out.contains(&format!(
+            "bytes          {}\n",
+            group_digits(CORPUS.len() * 5)
+        )));
+        assert!(out.contains("round trip     ok"));
+        assert!(out.contains(" MB/s ("));
+        assert!(out.contains("5 longest tokens:\n    id  bytes    count  token\n"));
+        // Escapes are shown once, not JSON-escaped a second time.
+        assert!(!out.contains("\\\\"), "{out}");
+        // The special token is excluded from the longest-token list.
+        assert!(!out.contains("<|endoftext|>"));
+    }
+
+    #[test]
+    fn stats_numbers_are_consistent() {
+        let tok = Tokenizer::new(Vocab::byte_level());
+        let stats = compute_stats(&tok, "abca", 3);
+        assert_eq!((stats.bytes, stats.tokens, stats.used), (4, 4, 3));
+        assert_eq!(stats.vocab_size, 256);
+        assert!((stats.bytes_per_token() - 1.0).abs() < 1e-9);
+        assert!(stats.megabytes_per_second() > 0.0);
+        assert!(stats.round_trip);
+        // All base tokens are one byte long; ties go to the lowest id.
+        assert_eq!(stats.longest, vec![(0, 1, 0), (1, 1, 0), (2, 1, 0)]);
+
+        // Token 10 is "\n": shown escaped once, inside quotes.
+        let listing = render_stats(&tok, &compute_stats(&tok, "a\n", 11));
+        assert!(
+            listing.contains("    10      1        1  \"\\n\"\n"),
+            "{listing}"
+        );
+
+        let empty = compute_stats(&tok, "", 0);
+        assert_eq!(empty.bytes_per_token(), 0.0);
+        assert!(empty.longest.is_empty());
+        let text = render_stats(&tok, &empty);
+        assert!(text.contains("vocab used     0 of 256 tokens (0.0%)"));
+        assert!(!text.contains("longest"));
+    }
+
+    #[test]
+    fn stats_flags_a_failed_round_trip() {
+        let tok = Tokenizer::new(Vocab::byte_level());
+        let mut stats = compute_stats(&tok, "x", 1);
+        stats.round_trip = false;
+        assert!(render_stats(&tok, &stats).contains("round trip     FAILED"));
+    }
+
+    #[test]
+    fn stats_needs_readable_files() {
+        let (dir, v) = setup(&[]);
+        let missing = dir.path().join("missing.txt");
+        let msg = fail(
+            &["stats", "--vocab", &v, "--input", missing.to_str().unwrap()],
+            "",
+        );
+        assert!(msg.starts_with("cannot read "));
     }
 
     #[test]
