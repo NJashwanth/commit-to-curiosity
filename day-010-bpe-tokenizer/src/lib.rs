@@ -9,7 +9,7 @@ use std::fmt;
 pub mod bpe;
 pub mod vocab;
 
-pub use bpe::{TrainOptions, TrainReport, train};
+pub use bpe::{Decoded, Tokenizer, TrainOptions, TrainReport, train};
 pub use vocab::{BASE_VOCAB_SIZE, Vocab};
 
 /// Everything that can go wrong in the library.
@@ -17,6 +17,8 @@ pub use vocab::{BASE_VOCAB_SIZE, Vocab};
 pub enum Error {
     /// The requested vocabulary is smaller than the 256 base tokens.
     VocabTooSmall { requested: usize, minimum: usize },
+    /// A token id passed to decode is not in the vocabulary.
+    UnknownTokenId { id: u32, vocab_size: usize },
 }
 
 impl fmt::Display for Error {
@@ -25,6 +27,10 @@ impl fmt::Display for Error {
             Error::VocabTooSmall { requested, minimum } => write!(
                 f,
                 "vocab size {requested} is too small: it must be at least {minimum}"
+            ),
+            Error::UnknownTokenId { id, vocab_size } => write!(
+                f,
+                "token id {id} is not in the vocabulary (valid ids are 0..{vocab_size})"
             ),
         }
     }

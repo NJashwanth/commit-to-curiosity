@@ -5,6 +5,10 @@
 //! doubly linked list of symbols, each pair remembers where it occurs, and a
 //! max-heap (with lazy deletion of stale entries) finds the next best pair.
 //! A merge then only touches the places where that pair actually occurs.
+//!
+//! Encoding replays the merges by rank: inside each chunk, the adjacent pair
+//! with the lowest rank is merged first, until no mergeable pair is left. A
+//! min-heap of pair positions keeps that at O(n log n) for long chunks.
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
@@ -245,6 +249,121 @@ fn progress_bar(len: usize, enabled: bool) -> ProgressBar {
     bar
 }
 
+/// Result of [`Tokenizer::decode`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Decoded {
+    pub text: String,
+    /// True if the bytes were not valid UTF-8 and some were replaced by U+FFFD.
+    pub lossy: bool,
+}
+
+/// Encodes text to token ids and decodes ids back, using a trained [`Vocab`].
+#[derive(Clone, Debug)]
+pub struct Tokenizer {
+    vocab: Vocab,
+}
+
+impl Tokenizer {
+    pub fn new(vocab: Vocab) -> Self {
+        Self { vocab }
+    }
+
+    pub fn vocab(&self) -> &Vocab {
+        &self.vocab
+    }
+
+    /// Encode text to token ids.
+    pub fn encode(&self, text: &str) -> Vec<u32> {
+        let mut out = Vec::new();
+        self.encode_chunk(text.as_bytes(), &mut out);
+        out
+    }
+
+    /// Apply merges to one chunk by rank, lowest first. Equal ranks (the same
+    /// pair in several places) are merged left to right.
+    fn encode_chunk(&self, bytes: &[u8], out: &mut Vec<u32>) {
+        let n = bytes.len();
+        if n < 2 {
+            out.extend(bytes.iter().map(|&b| u32::from(b)));
+            return;
+        }
+        let mut sym: Vec<u32> = bytes.iter().map(|&b| u32::from(b)).collect();
+        // Linked list over positions; `n` / `usize::MAX` mean "no neighbour".
+        let mut next: Vec<usize> = (1..=n).collect();
+        let mut prev: Vec<usize> = (0..n).map(|i| i.wrapping_sub(1)).collect();
+        let mut alive = vec![true; n];
+
+        let mut heap: BinaryHeap<Reverse<(u32, usize)>> = (0..n - 1)
+            .filter_map(|i| {
+                self.vocab
+                    .rank((sym[i], sym[i + 1]))
+                    .map(|r| Reverse((r, i)))
+            })
+            .collect();
+
+        while let Some(Reverse((rank, i))) = heap.pop() {
+            if !alive[i] || next[i] >= n {
+                continue;
+            }
+            let j = next[i];
+            // Skip entries whose pair has changed since they were pushed.
+            if self.vocab.rank((sym[i], sym[j])) != Some(rank) {
+                continue;
+            }
+            let id = BASE_VOCAB_SIZE as u32 + rank;
+            sym[i] = id;
+            alive[j] = false;
+            next[i] = next[j];
+            if next[i] < n {
+                prev[next[i]] = i;
+                if let Some(r) = self.vocab.rank((id, sym[next[i]])) {
+                    heap.push(Reverse((r, i)));
+                }
+            }
+            if prev[i] != usize::MAX {
+                let p = prev[i];
+                if let Some(r) = self.vocab.rank((sym[p], id)) {
+                    heap.push(Reverse((r, p)));
+                }
+            }
+        }
+
+        // Position 0 always survives: merges keep the left position.
+        let mut i = 0;
+        while i < n {
+            out.push(sym[i]);
+            i = next[i];
+        }
+    }
+
+    /// Concatenate the bytes of each token. Fails on an id outside the vocab.
+    pub fn decode_bytes(&self, ids: &[u32]) -> Result<Vec<u8>, Error> {
+        let mut out = Vec::new();
+        for &id in ids {
+            let bytes = self.vocab.token_bytes(id).ok_or(Error::UnknownTokenId {
+                id,
+                vocab_size: self.vocab.len(),
+            })?;
+            out.extend_from_slice(bytes);
+        }
+        Ok(out)
+    }
+
+    /// Decode ids to text. Bytes that are not valid UTF-8 (possible when the
+    /// ids are an arbitrary slice of an encoding) become U+FFFD and `lossy`
+    /// is set, so callers can warn.
+    pub fn decode(&self, ids: &[u32]) -> Result<Decoded, Error> {
+        let bytes = self.decode_bytes(ids)?;
+        Ok(match String::from_utf8(bytes) {
+            Ok(text) => Decoded { text, lossy: false },
+            Err(err) => Decoded {
+                text: String::from_utf8_lossy(err.as_bytes()).into_owned(),
+                lossy: true,
+            },
+        })
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -459,5 +578,121 @@ pub(crate) mod tests {
         .unwrap()
         .0;
         assert_eq!(quiet, shown);
+    }
+
+    // ---- encoding and decoding ----
+
+    /// Reference encoder: apply every merge in rank order, one at a time.
+    pub(crate) fn naive_encode(vocab: &Vocab, bytes: &[u8]) -> Vec<u32> {
+        let mut word: Vec<u32> = bytes.iter().map(|&b| u32::from(b)).collect();
+        for (rank, &pair) in vocab.merges().iter().enumerate() {
+            word = merge_word(&word, pair, (BASE_VOCAB_SIZE + rank) as u32);
+        }
+        word
+    }
+
+    pub(crate) const CORPUS: &str = "First Citizen: Before we proceed any further, hear me speak.\n\
+        All: Speak, speak.\n\
+        First Citizen: You are all resolved rather to die than to famish?\n\
+        All: Resolved. resolved.\n\
+        Hello 👋 world! నమస్తే ప్రపంచం. 🎉🎉 naïve café, 日本語のテキスト 123 4567.\n";
+
+    fn trained(vocab_size: usize) -> Tokenizer {
+        Tokenizer::new(train(&CORPUS.repeat(3), &opts(vocab_size)).unwrap().0)
+    }
+
+    #[test]
+    fn encode_reproduces_the_training_segmentation() {
+        let (vocab, _) = train("aaabdaaabac", &opts(259)).unwrap();
+        let tok = Tokenizer::new(vocab);
+        // "XdXac" from the classic example.
+        assert_eq!(tok.encode("aaabdaaabac"), vec![258, 100, 258, 97, 99]);
+    }
+
+    #[test]
+    fn round_trips_across_scripts() {
+        let tok = trained(400);
+        for text in [
+            "To be, or not to be",
+            "Hello 👋 world",
+            "👋🏽👨‍👩‍👧‍👦🇮🇳",
+            "నమస్తే ప్రపంచం",
+            "mixed: speak, నమస్తే, 日本語, Ελληνικά and 🎉!",
+            "",
+            " ",
+            "   \t\n\n  \r\n ",
+            "a",
+        ] {
+            let ids = tok.encode(text);
+            let decoded = tok.decode(&ids).unwrap();
+            assert_eq!(decoded.text, text);
+            assert!(!decoded.lossy);
+        }
+        assert!(tok.encode("").is_empty());
+    }
+
+    #[test]
+    fn heap_encoder_matches_the_naive_encoder() {
+        let tok = trained(500);
+        let mut rng = Lcg(7);
+        let pieces = [
+            "speak", " ", "resolved", "👋", "నమ", "aa", "e", ".\n", "Citizen",
+        ];
+        for _ in 0..300 {
+            let text: String = (0..rng.below(12))
+                .map(|_| pieces[rng.below(9) as usize])
+                .collect();
+            assert_eq!(
+                tok.encode(&text),
+                naive_encode(tok.vocab(), text.as_bytes()),
+                "{text:?}"
+            );
+        }
+        assert_eq!(
+            tok.encode(CORPUS),
+            naive_encode(tok.vocab(), CORPUS.as_bytes())
+        );
+    }
+
+    #[test]
+    fn encoding_compresses_the_training_text() {
+        let tok = trained(600);
+        let ids = tok.encode(CORPUS);
+        assert!(ids.len() * 2 < CORPUS.len(), "{} tokens", ids.len());
+        // An untrained vocab is one token per byte.
+        let base = Tokenizer::new(Vocab::byte_level());
+        assert_eq!(base.encode(CORPUS).len(), CORPUS.len());
+    }
+
+    #[test]
+    fn unknown_ids_are_a_clear_error() {
+        let tok = trained(300);
+        let err = tok.decode(&[72, 105, 300]).unwrap_err();
+        assert!(matches!(
+            err,
+            Error::UnknownTokenId {
+                id: 300,
+                vocab_size: 300
+            }
+        ));
+        assert_eq!(
+            err.to_string(),
+            "token id 300 is not in the vocabulary (valid ids are 0..300)"
+        );
+        assert!(tok.decode_bytes(&[u32::MAX]).is_err());
+    }
+
+    #[test]
+    fn invalid_utf8_decodes_lossily_with_a_flag() {
+        let tok = Tokenizer::new(Vocab::byte_level());
+        // First two bytes of 👋 only.
+        let decoded = tok.decode(&[0xF0, 0x9F]).unwrap();
+        assert!(decoded.lossy);
+        assert_eq!(decoded.text, "\u{FFFD}");
+        let decoded = tok
+            .decode(&[u32::from(b'o'), 0xFF, u32::from(b'k')])
+            .unwrap();
+        assert_eq!((decoded.text.as_str(), decoded.lossy), ("o\u{FFFD}k", true));
+        assert_eq!(tok.decode_bytes(&[0xF0, 0x9F]).unwrap(), vec![0xF0, 0x9F]);
     }
 }
