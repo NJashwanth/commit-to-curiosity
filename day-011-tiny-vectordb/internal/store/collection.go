@@ -8,6 +8,7 @@ import (
 	"hash/fnv"
 	"regexp"
 	"sort"
+	"sync"
 
 	"github.com/NJashwanth/commit-to-curiosity/day-011-tiny-vectordb/internal/hnsw"
 	"github.com/NJashwanth/commit-to-curiosity/day-011-tiny-vectordb/internal/vecmath"
@@ -125,9 +126,16 @@ type Query struct {
 
 // Collection is a named set of documents backed by one HNSW index.
 //
+// It is safe for concurrent use. Queries, gets and stats share a read lock
+// and run in parallel; upserts, deletes and cleanups take the write lock,
+// so writes are serialized and never interleave with a query. The lock
+// also covers the id maps, so an upsert's tombstone-then-insert is atomic
+// to readers.
+//
 // Metadata maps are never modified after they are stored (an upsert
 // replaces the whole map), so they can be handed to readers without copying.
 type Collection struct {
+	mu           sync.RWMutex
 	cfg          Config
 	metric       vecmath.Metric
 	index        *hnsw.Index
@@ -170,11 +178,19 @@ func (c *Collection) Config() Config { return c.cfg }
 func (c *Collection) Name() string { return c.cfg.Name }
 
 // Len returns the number of documents.
-func (c *Collection) Len() int { return len(c.byID) }
+func (c *Collection) Len() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.byID)
+}
 
 // SetCleanupRatio sets the tombstone fraction that triggers an automatic
 // cleanup. Zero or less turns automatic cleanup off.
-func (c *Collection) SetCleanupRatio(r float64) { c.cleanupRatio = r }
+func (c *Collection) SetCleanupRatio(r float64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cleanupRatio = r
+}
 
 // validateVector checks length, finiteness and, for cosine, direction.
 func (c *Collection) validateVector(v []float32) error {
@@ -224,6 +240,8 @@ func (c *Collection) Upsert(items []Item) (int, error) {
 		metas[i] = m
 	}
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for i, it := range items {
 		if old, ok := c.byID[it.ID]; ok {
 			c.removeNode(old)
@@ -254,6 +272,8 @@ func (c *Collection) removeNode(node uint32) {
 // Get returns a document by id. For cosine collections the vector comes
 // back normalized, because that is what the index stores.
 func (c *Collection) Get(id string) (Item, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	node, ok := c.byID[id]
 	if !ok {
 		return Item{}, fmt.Errorf("id %q: %w", id, ErrNotFound)
@@ -265,6 +285,8 @@ func (c *Collection) Get(id string) (Item, error) {
 // Delete removes a document, reporting whether it existed. The graph node
 // becomes a tombstone until the next cleanup.
 func (c *Collection) Delete(id string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	node, ok := c.byID[id]
 	if !ok {
 		return false
@@ -286,7 +308,11 @@ func (c *Collection) maybeCleanup() {
 }
 
 // Cleanup removes all tombstones from the graph now and returns how many.
-func (c *Collection) Cleanup() int { return c.index.Cleanup() }
+func (c *Collection) Cleanup() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.index.Cleanup()
+}
 
 // Query returns the k nearest documents that match the filter, closest
 // first.
@@ -304,6 +330,8 @@ func (c *Collection) Query(q Query) ([]Hit, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	var accept func(uint32) bool
 	if filter != nil {
 		accept = func(node uint32) bool { return filter(c.meta[node]) }
@@ -329,6 +357,8 @@ type Info struct {
 
 // Info returns the collection's config, size and graph shape.
 func (c *Collection) Info() Info {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return Info{
 		Config:     c.cfg,
 		Count:      len(c.byID),
@@ -339,6 +369,8 @@ func (c *Collection) Info() Info {
 
 // IDs returns every document id, sorted.
 func (c *Collection) IDs() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	ids := make([]string, 0, len(c.byID))
 	for id := range c.byID {
 		ids = append(ids, id)

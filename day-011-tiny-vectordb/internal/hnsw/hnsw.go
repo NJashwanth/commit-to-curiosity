@@ -95,7 +95,13 @@ type node struct {
 
 // Index is an HNSW graph. Node ids are assigned densely from 0 in
 // insertion order and never reused; slots freed by Cleanup stay nil.
+//
+// It is safe for concurrent use: searches and other reads share a read
+// lock and run in parallel, while Insert, Delete and Cleanup take the
+// write lock and run one at a time.
 type Index struct {
+	mu sync.RWMutex
+
 	cfg    Config
 	dist   vecmath.DistanceFunc
 	mL     float64 // level multiplier, 1/ln(M)
@@ -136,14 +142,26 @@ func New(cfg Config) (*Index, error) {
 func (h *Index) Config() Config { return h.cfg }
 
 // Len returns the number of live (not deleted) nodes.
-func (h *Index) Len() int { return h.live }
+func (h *Index) Len() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.live
+}
 
 // Tombstones returns the number of deleted nodes awaiting Cleanup.
-func (h *Index) Tombstones() int { return h.tombs }
+func (h *Index) Tombstones() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.tombs
+}
 
 // Slots returns the number of node ids handed out so far, including
 // deleted and cleaned-up ones. The next Insert returns this id.
-func (h *Index) Slots() int { return len(h.nodes) }
+func (h *Index) Slots() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.nodes)
+}
 
 // isLive reports whether id is a node that may be returned from a search.
 func (h *Index) isLive(id uint32) bool {
@@ -151,11 +169,17 @@ func (h *Index) isLive(id uint32) bool {
 }
 
 // IsLive reports whether id refers to a live node.
-func (h *Index) IsLive(id uint32) bool { return h.isLive(id) }
+func (h *Index) IsLive(id uint32) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.isLive(id)
+}
 
 // Vector returns a copy of the stored vector for a live node. For cosine
 // indexes this is the normalized vector.
 func (h *Index) Vector(id uint32) ([]float32, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 	if !h.isLive(id) {
 		return nil, false
 	}
@@ -166,6 +190,12 @@ func (h *Index) Vector(id uint32) ([]float32, bool) {
 
 // MaxLevel returns the highest layer in the graph, or -1 if it is empty.
 func (h *Index) MaxLevel() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.maxLevel()
+}
+
+func (h *Index) maxLevel() int {
 	if !h.hasEnt {
 		return -1
 	}
@@ -207,10 +237,12 @@ func (h *Index) Insert(v []float32) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if h.live == 0 && h.tombs > 0 {
 		// Everything is deleted: there is nothing live to link to, so drop
 		// the dead graph and start fresh.
-		h.Cleanup()
+		h.cleanup()
 	}
 	id := uint32(len(h.nodes))
 	level := h.randomLevel()

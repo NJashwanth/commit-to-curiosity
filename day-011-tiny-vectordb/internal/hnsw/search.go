@@ -31,6 +31,8 @@ func (h *Index) SearchFilter(q []float32, k, ef int, accept func(id uint32) bool
 	if err != nil {
 		return nil, err
 	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 	if h.live == 0 {
 		return nil, nil
 	}

@@ -4,6 +4,8 @@ package hnsw
 // The node stays in the graph, so paths through it still work, but it is
 // never returned from a search. Cleanup removes tombstones for good.
 func (h *Index) Delete(id uint32) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if !h.isLive(id) {
 		return false
 	}
@@ -25,6 +27,12 @@ func (h *Index) Delete(id uint32) bool {
 // candidates at all are relinked with a fresh search, and finally any
 // live node that nothing links to any more is reconnected the same way.
 func (h *Index) Cleanup() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.cleanup()
+}
+
+func (h *Index) cleanup() int {
 	if h.tombs == 0 {
 		return 0
 	}
@@ -172,7 +180,9 @@ type Stats struct {
 
 // Stats returns node counts per layer and the mean layer-0 degree.
 func (h *Index) Stats() Stats {
-	st := Stats{Live: h.live, Tombstones: h.tombs, MaxLevel: h.MaxLevel()}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	st := Stats{Live: h.live, Tombstones: h.tombs, MaxLevel: h.maxLevel()}
 	if h.hasEnt {
 		st.LayerSizes = make([]int, h.top+1)
 	}
