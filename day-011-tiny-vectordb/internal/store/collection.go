@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/NJashwanth/commit-to-curiosity/day-011-tiny-vectordb/internal/hnsw"
 	"github.com/NJashwanth/commit-to-curiosity/day-011-tiny-vectordb/internal/vecmath"
@@ -143,6 +144,9 @@ type Collection struct {
 	keys         []string          // node -> id ("" once deleted)
 	meta         []map[string]any  // node -> metadata
 	cleanupRatio float64
+
+	version uint64        // bumped by every write, under mu
+	saved   atomic.Uint64 // version last written to disk
 }
 
 // NewCollection makes an empty collection.
@@ -258,6 +262,7 @@ func (c *Collection) Upsert(items []Item) (int, error) {
 		c.meta[node] = metas[i]
 		c.byID[it.ID] = node
 	}
+	c.version++
 	c.maybeCleanup()
 	return len(items), nil
 }
@@ -292,6 +297,7 @@ func (c *Collection) Delete(id string) bool {
 		return false
 	}
 	c.removeNode(node)
+	c.version++
 	c.maybeCleanup()
 	return true
 }
@@ -311,7 +317,11 @@ func (c *Collection) maybeCleanup() {
 func (c *Collection) Cleanup() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.index.Cleanup()
+	n := c.index.Cleanup()
+	if n > 0 {
+		c.version++
+	}
+	return n
 }
 
 // Query returns the k nearest documents that match the filter, closest
