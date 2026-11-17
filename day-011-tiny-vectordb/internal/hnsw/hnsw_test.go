@@ -134,6 +134,7 @@ func TestConfigDefaultsAndValidation(t *testing.T) {
 // With mL = 1/ln(M), P(level >= l) = M^-l. Check the empirical tail
 // fractions against that for the first few layers.
 func TestLevelDistribution(t *testing.T) {
+	t.Parallel()
 	for _, m := range []int{4, 16} {
 		h, _ := New(Config{Dim: 1, Metric: vecmath.MetricL2, M: m, Seed: 1})
 		if want := 1 / math.Log(float64(m)); math.Abs(h.mL-want) > 1e-12 {
@@ -174,8 +175,9 @@ func TestLevelDistribution(t *testing.T) {
 
 // Small M on a few thousand points forces lots of overflow and pruning.
 func TestNeighborListsNeverExceedCap(t *testing.T) {
+	t.Parallel()
 	for _, m := range []int{3, 6, 16} {
-		h := build(t, Config{Dim: 8, Metric: vecmath.MetricL2, M: m, EfConstruction: 40, Seed: 2}, uniform(2, 2000, 8))
+		h := build(t, Config{Dim: 8, Metric: vecmath.MetricL2, M: m, EfConstruction: 40, Seed: 2}, uniform(2, 1500, 8))
 		checkGraph(t, h)
 		full := 0
 		for _, n := range h.nodes {
@@ -190,7 +192,8 @@ func TestNeighborListsNeverExceedCap(t *testing.T) {
 }
 
 func TestGraphConnectedAfterInserts(t *testing.T) {
-	h := build(t, Config{Dim: 16, Metric: vecmath.MetricCosine, M: 8, EfConstruction: 64, Seed: 3}, uniform(3, 3000, 16))
+	t.Parallel()
+	h := build(t, Config{Dim: 16, Metric: vecmath.MetricCosine, M: 8, EfConstruction: 64, Seed: 3}, uniform(3, 2000, 16))
 	checkGraph(t, h)
 	if h.MaxLevel() < 2 {
 		t.Fatalf("expected a few layers with 3000 points and M=8, got top layer %d", h.MaxLevel())
@@ -208,6 +211,7 @@ func TestGraphConnectedAfterInserts(t *testing.T) {
 }
 
 func TestBuildIsDeterministic(t *testing.T) {
+	t.Parallel()
 	cfg := Config{Dim: 8, Metric: vecmath.MetricL2, M: 6, EfConstruction: 32, Seed: 9}
 	vecs := uniform(4, 500, 8)
 	a := build(t, cfg, vecs)

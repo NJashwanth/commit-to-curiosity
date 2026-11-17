@@ -18,7 +18,7 @@ const (
 	fixK       = 10
 )
 
-var fixCfg = Config{Dim: fixDim, Metric: vecmath.MetricCosine, M: 16, EfConstruction: 100, Seed: 11}
+var fixCfg = Config{Dim: fixDim, Metric: vecmath.MetricCosine, M: 16, EfConstruction: 40, Seed: 11}
 
 type fixture struct {
 	vecs    [][]float32
@@ -94,6 +94,7 @@ func recall(t testing.TB, h *Index, queries [][]float32, truth [][]uint32, k, ef
 }
 
 func TestRecallAtEf128(t *testing.T) {
+	t.Parallel()
 	f := getFixture(t)
 	r := recall(t, f.index, f.queries, f.truth, fixK, 128)
 	t.Logf("recall@10 at ef=128 on %d vectors: %.4f", fixN, r)
@@ -104,6 +105,7 @@ func TestRecallAtEf128(t *testing.T) {
 
 // More candidates can only help on average: recall must not drop as ef rises.
 func TestRecallImprovesWithEf(t *testing.T) {
+	t.Parallel()
 	f := getFixture(t)
 	prev := -1.0
 	for _, ef := range []int{10, 32, 128, 256} {
@@ -117,6 +119,7 @@ func TestRecallImprovesWithEf(t *testing.T) {
 }
 
 func TestSearchFindsInsertedVector(t *testing.T) {
+	t.Parallel()
 	f := getFixture(t)
 	for _, id := range []int{0, 17, 1234, fixN - 1} {
 		res, err := f.index.Search(f.vecs[id], 1, 64)
@@ -130,6 +133,7 @@ func TestSearchFindsInsertedVector(t *testing.T) {
 }
 
 func TestSearchResultsSortedAndSized(t *testing.T) {
+	t.Parallel()
 	f := getFixture(t)
 	for _, k := range []int{1, 5, 10, 100} {
 		res, err := f.index.Search(f.queries[0], k, 0) // ef 0 means the default

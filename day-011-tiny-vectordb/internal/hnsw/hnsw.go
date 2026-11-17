@@ -46,6 +46,12 @@ type Config struct {
 	EfSearch int
 	// Seed seeds random level assignment, so builds are reproducible.
 	Seed uint64
+	// SimpleSelection keeps the M closest candidates as neighbors instead
+	// of using the paper's diversity heuristic. Only useful to compare.
+	SimpleSelection bool
+	// KeepPrunedConnections refills a heuristic-pruned neighbor list up to
+	// the cap with the closest pruned candidates.
+	KeepPrunedConnections bool
 }
 
 func (c Config) withDefaults() Config {
@@ -99,7 +105,8 @@ type Index struct {
 	hasEnt bool
 	top    int // highest layer in the graph
 
-	scratch sync.Pool // *searchScratch
+	scratch  sync.Pool      // *searchScratch for queries, which may run concurrently
+	wscratch *searchScratch // for inserts, which are serialized
 }
 
 // New returns an empty index.
@@ -179,8 +186,10 @@ func (h *Index) Insert(v []float32) (uint32, error) {
 		return id, nil
 	}
 
-	s := h.getScratch()
-	defer h.putScratch(s)
+	if h.wscratch == nil {
+		h.wscratch = &searchScratch{}
+	}
+	s := h.wscratch
 
 	// Phase 1: on layers above the new node's level, just walk greedily
 	// towards it to find a good starting point one layer down.
@@ -240,7 +249,55 @@ func (h *Index) addLink(from uint32, c candidate, layer int) {
 }
 
 // selectNeighbors picks up to m neighbors from candidates sorted closest
-// first. For now it simply keeps the m closest.
+// to the base node first. With fewer than m candidates there is nothing to
+// choose, so all are kept.
 func (h *Index) selectNeighbors(cands []candidate, m int) []candidate {
-	return cands[:min(m, len(cands))]
+	if len(cands) <= m {
+		return cands
+	}
+	if h.cfg.SimpleSelection {
+		return cands[:m]
+	}
+	return h.selectHeuristic(cands, m)
+}
+
+// selectHeuristic is SELECT-NEIGHBORS-HEURISTIC (Algorithm 4).
+//
+// Walking candidates from closest to furthest, a candidate e is kept only
+// if it is closer to the base node than to every neighbor already kept. If
+// some kept neighbor r is closer to e, then e is "behind" r: a search can
+// reach e through r, so a direct link to e adds little. Skipping it leaves
+// room for links in other directions, which is what lets searches cross
+// between clusters instead of getting stuck inside one.
+//
+// Pruned candidates are optionally used to fill the list back up to m
+// (keepPrunedConnections in the paper).
+func (h *Index) selectHeuristic(cands []candidate, m int) []candidate {
+	kept := make([]candidate, 0, m)
+	var pruned []candidate
+	for _, e := range cands {
+		if len(kept) == m {
+			break
+		}
+		ev := h.nodes[e.id].vec
+		good := true
+		for _, r := range kept {
+			if h.dist(ev, h.nodes[r.id].vec) < e.dist {
+				good = false
+				break
+			}
+		}
+		if good {
+			kept = append(kept, e)
+		} else if h.cfg.KeepPrunedConnections {
+			pruned = append(pruned, e)
+		}
+	}
+	for _, p := range pruned {
+		if len(kept) == m {
+			break
+		}
+		kept = append(kept, p)
+	}
+	return kept
 }
