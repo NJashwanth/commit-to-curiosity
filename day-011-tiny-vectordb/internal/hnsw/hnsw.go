@@ -88,10 +88,13 @@ type node struct {
 	vec   []float32
 	level int
 	links [][]uint32 // links[layer]
+	// deleted marks a tombstone: still in the graph so searches can route
+	// through it, but never returned. Cleanup removes it for good.
+	deleted bool
 }
 
 // Index is an HNSW graph. Node ids are assigned densely from 0 in
-// insertion order.
+// insertion order and never reused; slots freed by Cleanup stay nil.
 type Index struct {
 	cfg    Config
 	dist   vecmath.DistanceFunc
@@ -104,6 +107,8 @@ type Index struct {
 	entry  uint32 // entry point: a node on the top layer
 	hasEnt bool
 	top    int // highest layer in the graph
+	live   int // nodes that are not deleted
+	tombs  int // deleted nodes still in the graph
 
 	scratch  sync.Pool      // *searchScratch for queries, which may run concurrently
 	wscratch *searchScratch // for inserts, which are serialized
@@ -130,8 +135,34 @@ func New(cfg Config) (*Index, error) {
 // Config returns the index configuration with defaults filled in.
 func (h *Index) Config() Config { return h.cfg }
 
-// Len returns the number of nodes in the graph.
-func (h *Index) Len() int { return len(h.nodes) }
+// Len returns the number of live (not deleted) nodes.
+func (h *Index) Len() int { return h.live }
+
+// Tombstones returns the number of deleted nodes awaiting Cleanup.
+func (h *Index) Tombstones() int { return h.tombs }
+
+// Slots returns the number of node ids handed out so far, including
+// deleted and cleaned-up ones. The next Insert returns this id.
+func (h *Index) Slots() int { return len(h.nodes) }
+
+// isLive reports whether id is a node that may be returned from a search.
+func (h *Index) isLive(id uint32) bool {
+	return int(id) < len(h.nodes) && h.nodes[id] != nil && !h.nodes[id].deleted
+}
+
+// IsLive reports whether id refers to a live node.
+func (h *Index) IsLive(id uint32) bool { return h.isLive(id) }
+
+// Vector returns a copy of the stored vector for a live node. For cosine
+// indexes this is the normalized vector.
+func (h *Index) Vector(id uint32) ([]float32, bool) {
+	if !h.isLive(id) {
+		return nil, false
+	}
+	out := make([]float32, len(h.nodes[id].vec))
+	copy(out, h.nodes[id].vec)
+	return out, true
+}
 
 // MaxLevel returns the highest layer in the graph, or -1 if it is empty.
 func (h *Index) MaxLevel() int {
@@ -176,10 +207,16 @@ func (h *Index) Insert(v []float32) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
+	if h.live == 0 && h.tombs > 0 {
+		// Everything is deleted: there is nothing live to link to, so drop
+		// the dead graph and start fresh.
+		h.Cleanup()
+	}
 	id := uint32(len(h.nodes))
 	level := h.randomLevel()
 	n := &node{vec: vec, level: level, links: make([][]uint32, level+1)}
 	h.nodes = append(h.nodes, n)
+	h.live++
 
 	if !h.hasEnt {
 		h.entry, h.top, h.hasEnt = id, level, true
@@ -199,10 +236,11 @@ func (h *Index) Insert(v []float32) (uint32, error) {
 	}
 
 	// Phase 2: on every layer the node is on, find efConstruction
-	// candidates, link to the best M of them, and link them back.
+	// candidates, link to the best M of them, and link them back. Deleted
+	// nodes are walked through but never chosen as neighbors.
 	eps := []candidate{ep}
 	for layer := min(level, h.top); layer >= 0; layer-- {
-		w := h.searchLayer(vec, eps, h.cfg.EfConstruction, layer, s)
+		w := h.searchLayer(vec, eps, h.cfg.EfConstruction, layer, h.isLive, s)
 		neighbors := h.selectNeighbors(w, h.cfg.M)
 		links := make([]uint32, 0, h.maxLinks(layer))
 		for _, nb := range neighbors {

@@ -11,11 +11,19 @@ type Result struct {
 	Distance float32
 }
 
-// Search returns approximately the k nearest nodes to q, closest first
-// (Algorithm 5 in the paper). ef is the size of the candidate list on
-// layer 0: larger ef means better recall and slower queries. ef <= 0 uses
-// the index's EfSearch, and ef is always raised to at least k.
+// Search returns approximately the k nearest live nodes to q, closest
+// first (Algorithm 5 in the paper). ef is the size of the candidate list
+// on layer 0: larger ef means better recall and slower queries. ef <= 0
+// uses the index's EfSearch, and ef is always raised to at least k.
 func (h *Index) Search(q []float32, k, ef int) ([]Result, error) {
+	return h.SearchFilter(q, k, ef, nil)
+}
+
+// SearchFilter is Search restricted to nodes for which accept returns true
+// (nil accepts all). The filter is applied inside the layer-0 search, not
+// afterwards, so it still returns k results when at least k reachable
+// nodes match.
+func (h *Index) SearchFilter(q []float32, k, ef int, accept func(id uint32) bool) ([]Result, error) {
 	if k < 1 {
 		return nil, ErrInvalidK
 	}
@@ -23,7 +31,7 @@ func (h *Index) Search(q []float32, k, ef int) ([]Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !h.hasEnt {
+	if h.live == 0 {
 		return nil, nil
 	}
 	if ef <= 0 {
@@ -40,8 +48,14 @@ func (h *Index) Search(q []float32, k, ef int) ([]Result, error) {
 	for layer := h.top; layer > 0; layer-- {
 		ep = h.greedyClosest(qv, ep, layer)
 	}
-	// Then a best-first search with ef candidates on the full bottom layer.
-	w := h.searchLayer(qv, []candidate{ep}, ef, 0, s)
+	// Then a best-first search with ef candidates on the full bottom layer,
+	// where tombstones and filtered-out nodes are walked through but not
+	// collected.
+	ok := h.isLive
+	if accept != nil {
+		ok = func(id uint32) bool { return h.isLive(id) && accept(id) }
+	}
+	w := h.searchLayer(qv, []candidate{ep}, ef, 0, ok, s)
 
 	out := make([]Result, 0, min(k, len(w)))
 	for _, c := range w[:min(k, len(w))] {

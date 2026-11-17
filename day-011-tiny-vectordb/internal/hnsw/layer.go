@@ -72,7 +72,14 @@ func (h *Index) greedyClosest(q []float32, ep candidate, layer int) candidate {
 // C (cand) is a min-heap of nodes to expand; W (res) is a max-heap of the
 // best ef so far. We stop when the closest unexpanded node is further than
 // the worst result, because expanding it can't improve W.
-func (h *Index) searchLayer(q []float32, eps []candidate, ef, layer int, s *searchScratch) []candidate {
+//
+// accept (nil means everything) decides which nodes may enter W. Rejected
+// nodes, such as tombstones or nodes failing a metadata filter, are still
+// expanded, so the search can travel through them to accepted nodes behind
+// them. While W has fewer than ef nodes there is no bound, so a very
+// selective filter makes the search explore further rather than return
+// fewer results.
+func (h *Index) searchLayer(q []float32, eps []candidate, ef, layer int, accept func(uint32) bool, s *searchScratch) []candidate {
 	s.visited.reset(len(h.nodes))
 	s.cand = s.cand[:0]
 	s.res = s.res[:0]
@@ -82,9 +89,11 @@ func (h *Index) searchLayer(q []float32, eps []candidate, ef, layer int, s *sear
 			continue
 		}
 		s.cand.push(e)
-		s.res.push(e)
-		if len(s.res) > ef {
-			s.res.pop()
+		if accept == nil || accept(e.id) {
+			s.res.push(e)
+			if len(s.res) > ef {
+				s.res.pop()
+			}
 		}
 	}
 
@@ -100,9 +109,11 @@ func (h *Index) searchLayer(q []float32, eps []candidate, ef, layer int, s *sear
 			d := h.dist(q, h.nodes[nb].vec)
 			if len(s.res) < ef || d < s.res.top().dist {
 				s.cand.push(candidate{nb, d})
-				s.res.push(candidate{nb, d})
-				if len(s.res) > ef {
-					s.res.pop()
+				if accept == nil || accept(nb) {
+					s.res.push(candidate{nb, d})
+					if len(s.res) > ef {
+						s.res.pop()
+					}
 				}
 			}
 		}
