@@ -41,15 +41,17 @@ def paint(text: str, color: str, enabled: bool) -> str:
 _ESCAPES = {7: "a", 8: "b", 9: "t", 10: "n", 11: "v", 12: "f", 13: "r", 0x22: '"', 0x5C: "\\"}
 
 
-def quote_path(path: str) -> str:
+def quote_path(path: str, quote_space: bool = False) -> str:
     """Quote a path the way Git does with core.quotePath=true (the default).
 
     Paths made only of printable ASCII come back unchanged. Anything else is wrapped
     in double quotes with C escapes, and every byte >= 0x80 becomes an octal escape,
-    so ``café.txt`` prints as ``"caf\\303\\251.txt"``.
+    so ``café.txt`` prints as ``"caf\\303\\251.txt"``. Short and porcelain status
+    output also quote paths containing a space (``quote_space=True``).
     """
     raw = os.fsencode(path)
-    if not any(b < 0x20 or b in (0x22, 0x5C) or b >= 0x7F for b in raw):
+    special = (0x22, 0x5C, 0x20) if quote_space else (0x22, 0x5C)
+    if not any(b < 0x20 or b in special or b >= 0x7F for b in raw):
         return path
     parts = ['"']
     for b in raw:
