@@ -303,3 +303,47 @@ def validate(obj_type: str, data: bytes) -> None:
                 raise GitError("corrupt tree object")
     elif obj_type == "commit":
         Commit.parse(data)
+
+
+# --- trees <-> flat path maps ----------------------------------------------
+
+
+def write_tree(store: ObjectStore, files) -> str:
+    """Write nested trees for ``(path, mode, sha)`` triples; return the root tree id.
+
+    ``a/b/c.txt`` becomes a root tree holding ``a`` -> tree holding ``b`` -> tree
+    holding ``c.txt``. Subtrees are written first because a tree stores its
+    children's ids.
+    """
+    root: dict = {}
+    for path, mode, sha in files:
+        *dirs, name = path.split("/")
+        node = root
+        for d in dirs:
+            node = node.setdefault(d, {})
+        node[name] = (mode, sha)
+
+    def write_node(node: dict) -> str:
+        entries = []
+        for name, value in node.items():
+            if isinstance(value, dict):
+                entries.append(TreeEntry(MODE_TREE, name, write_node(value)))
+            else:
+                entries.append(TreeEntry(value[0], name, value[1]))
+        return store.write("tree", serialize_tree(entries))
+
+    return write_node(root)
+
+
+def flatten_tree(store: ObjectStore, sha: str | None, prefix: str = "") -> dict[str, tuple[str, str]]:
+    """Every file under a tree as ``{path: (mode, sha)}``."""
+    if sha is None:
+        return {}
+    files: dict[str, tuple[str, str]] = {}
+    for e in parse_tree(store.read_type(sha, "tree")):
+        path = f"{prefix}{e.name}"
+        if e.is_tree:
+            files.update(flatten_tree(store, e.sha, path + "/"))
+        else:
+            files[path] = (e.mode, e.sha)
+    return files

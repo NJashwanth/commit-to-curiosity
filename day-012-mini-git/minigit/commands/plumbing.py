@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from .. import refs
 from ..errors import GitError
 from ..objects import OBJECT_TYPES, hash_object, parse_tree, validate
 from ..output import quote_path, write
@@ -89,4 +90,4 @@ def cmd_cat_file(args) -> int:
 
 
 def resolve(repo: Repository, name: str) -> str:
-    return repo.objects.resolve_prefix(name)
+    return refs.resolve_revision(repo, name)
