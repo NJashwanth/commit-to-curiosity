@@ -6,10 +6,10 @@ import argparse
 import sys
 
 from . import __version__
-from .commands import plumbing
+from .commands import add, plumbing
 from .errors import GitError
 
-COMMAND_MODULES = (plumbing,)
+COMMAND_MODULES = (plumbing, add)
 
 
 def build_parser() -> argparse.ArgumentParser:
