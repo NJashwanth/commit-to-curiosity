@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A scalar autograd engine and tiny neural net library in TypeScript, trained live in the browser." />
+    <title>Autograd Playground</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%232563eb'/><path d='M9 21 L16 9 L23 21' stroke='white' stroke-width='3' fill='none'/></svg>" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <h1>autograd-playground</h1>
+        <p>A scalar autograd engine and a tiny neural net, trained live. No ML libraries.</p>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="Views">
+        <button role="tab" id="tab-btn-train" aria-controls="tab-train" aria-selected="true">Playground</button>
+        <button role="tab" id="tab-btn-graph" aria-controls="tab-graph" aria-selected="false">Graph viewer</button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="tab-train" class="train" role="tabpanel" aria-labelledby="tab-btn-train">
+        <form class="controls" id="controls" autocomplete="off">
+          <fieldset>
+            <legend>Data</legend>
+            <label>Dataset
+              <select id="dataset">
+                <option value="moons">Two moons</option>
+                <option value="circles">Circles</option>
+                <option value="xor">XOR</option>
+                <option value="spiral">Spiral</option>
+              </select>
+            </label>
+            <label>Samples <output id="samples-out">200</output>
+              <input id="samples" type="range" min="20" max="500" step="10" value="200" />
+            </label>
+            <label>Noise <output id="noise-out">0.10</output>
+              <input id="noise" type="range" min="0" max="0.5" step="0.01" value="0.1" />
+            </label>
+            <label>Seed
+              <input id="seed" type="number" min="0" max="999999" step="1" value="1" inputmode="numeric" />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Network</legend>
+            <label>Shape
+              <input id="shape" type="text" value="2-16-16-1" spellcheck="false" list="shape-presets" aria-describedby="shape-msg" />
+              <datalist id="shape-presets">
+                <option value="2-1"></option>
+                <option value="2-8-1"></option>
+                <option value="2-16-16-1"></option>
+                <option value="2-32-32-1"></option>
+                <option value="2-8-8-8-1"></option>
+              </datalist>
+            </label>
+            <small id="shape-msg" class="hint">input-hidden…-output · <span id="param-count">337</span> params</small>
+            <label>Activation
+              <select id="activation">
+                <option value="tanh">tanh</option>
+                <option value="relu">ReLU</option>
+                <option value="sigmoid">sigmoid</option>
+                <option value="linear">linear</option>
+              </select>
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Training</legend>
+            <label>Loss
+              <select id="loss">
+                <option value="hinge">Hinge (max margin)</option>
+                <option value="bce">Binary cross-entropy</option>
+                <option value="mse">Mean squared error</option>
+              </select>
+            </label>
+            <label>Optimizer
+              <select id="optimizer">
+                <option value="adam">Adam</option>
+                <option value="sgd">SGD + momentum 0.9</option>
+              </select>
+            </label>
+            <label>Learning rate
+              <select id="lr">
+                <option>0.001</option>
+                <option>0.003</option>
+                <option>0.01</option>
+                <option selected>0.03</option>
+                <option>0.1</option>
+                <option>0.3</option>
+              </select>
+            </label>
+            <label>L2 regularization
+              <select id="l2">
+                <option value="0">0</option>
+                <option value="0.00001">0.00001</option>
+                <option value="0.0001" selected>0.0001</option>
+                <option value="0.001">0.001</option>
+                <option value="0.01">0.01</option>
+              </select>
+            </label>
+            <label>Batch size
+              <select id="batch">
+                <option value="0" selected>Full dataset</option>
+                <option value="8">8</option>
+                <option value="16">16</option>
+                <option value="32">32</option>
+                <option value="64">64</option>
+              </select>
+            </label>
+          </fieldset>
+        </form>
+
+        <div class="stage">
+          <div class="buttons" role="group" aria-label="Training controls">
+            <button id="play" class="primary" type="button" aria-keyshortcuts="Space">Play</button>
+            <button id="step" type="button" aria-keyshortcuts="S">Step</button>
+            <button id="reset" type="button" aria-keyshortcuts="R">Reset</button>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="heatmap" role="img" aria-label="Decision boundary of the network with the training data on top"></canvas>
+          </div>
+          <p class="legend">
+            <span class="swatch pos"></span> class +1
+            <span class="swatch neg"></span> class −1
+            <span class="muted">· shading is the network's score; ringed points are misclassified</span>
+          </p>
+          <p id="train-error" class="error" role="alert" hidden></p>
+        </div>
+
+        <div class="readout">
+          <dl class="stats">
+            <div><dt>Step</dt><dd id="stat-step">0</dd></div>
+            <div><dt>Steps/s</dt><dd id="stat-sps">0</dd></div>
+            <div><dt>Loss</dt><dd id="stat-loss">–</dd></div>
+            <div><dt>Accuracy</dt><dd id="stat-acc">–</dd></div>
+          </dl>
+          <figure class="chart">
+            <figcaption>Loss <span class="muted">(log scale)</span></figcaption>
+            <svg id="loss-chart" viewBox="0 0 320 130" role="img" aria-label="Loss over training steps"></svg>
+          </figure>
+          <figure class="chart">
+            <figcaption>Accuracy</figcaption>
+            <svg id="acc-chart" viewBox="0 0 320 130" role="img" aria-label="Accuracy over training steps"></svg>
+          </figure>
+          <p class="keys muted"><kbd>Space</kbd> play/pause · <kbd>S</kbd> step · <kbd>R</kbd> reset</p>
+        </div>
+      </section>
+
+      <section id="tab-graph" class="graph" role="tabpanel" aria-labelledby="tab-btn-graph" hidden>
+        <form id="graph-form" class="graph-form" autocomplete="off" novalidate>
+          <label class="expr-label">Expression
+            <input id="expr" type="text" value="tanh(a*b + c)" spellcheck="false" aria-describedby="graph-error" />
+          </label>
+          <div id="vars" class="vars" aria-label="Input values"></div>
+          <button id="run-backward" class="primary" type="submit">Run backward</button>
+        </form>
+        <p class="examples">Try:
+          <button type="button" class="chip">tanh(a*b + c)</button>
+          <button type="button" class="chip">a*a + a</button>
+          <button type="button" class="chip">sigmoid(w1*x1 + w2*x2 + b)</button>
+          <button type="button" class="chip">log(exp(a) + exp(b))</button>
+          <button type="button" class="chip">(a - b)^2 / 2</button>
+        </p>
+        <p class="hint">Operators <code>+ - * / ^</code>, functions <code>exp log tanh relu sigmoid</code>. Each box shows a node's value (data) and d(output)/d(node) (grad) after backward.</p>
+        <p id="graph-error" class="error" role="alert" hidden></p>
+        <p id="graph-status" class="status" aria-live="polite"></p>
+        <div id="graph-out" class="graph-out"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

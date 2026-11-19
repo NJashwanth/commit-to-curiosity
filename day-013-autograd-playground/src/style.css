@@ -1,0 +1,576 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --ink: #16191f;
+  --muted: #5d6573;
+  --line: #dde1e7;
+  --accent: #2563eb;
+  --accent-ink: #ffffff;
+  --pos: #2563eb;
+  --neg: #ea7317;
+  --heat-mid: #ffffff;
+  --point-stroke: #ffffff;
+  --grad-pos: #0f7a3d;
+  --grad-neg: #c2341b;
+  --error: #b42318;
+  --error-bg: #fdecea;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0f1115;
+    --panel: #171a21;
+    --ink: #e7eaf0;
+    --muted: #9aa3b2;
+    --line: #2a2f3a;
+    --accent: #5b8cff;
+    --accent-ink: #0b0d12;
+    --pos: #5b8cff;
+    --neg: #f59345;
+    --heat-mid: #171a21;
+    --point-stroke: #0f1115;
+    --grad-pos: #4ade80;
+    --grad-neg: #ff7a66;
+    --error: #ff8a7a;
+    --error-bg: #3a1714;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 18px 24px 0;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.brand p {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+
+.tabs button[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+main {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px 24px 32px;
+}
+
+/* ---------------------------------------------------------------- train -- */
+
+.train {
+  display: grid;
+  grid-template-columns: 230px minmax(320px, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.controls,
+.stage,
+.readout,
+.graph {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.controls {
+  padding: 4px 14px 14px;
+}
+
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+
+legend {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+label {
+  display: grid;
+  gap: 3px;
+  font-size: 13px;
+}
+
+label output {
+  justify-self: end;
+  margin-top: -21px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+select,
+input[type="text"],
+input[type="number"] {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  width: 100%;
+}
+
+input[type="text"],
+input[type="number"] {
+  font-family: var(--mono);
+}
+
+input[aria-invalid="true"] {
+  border-color: var(--error);
+  outline-color: var(--error);
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hint.bad {
+  color: var(--error);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.buttons button,
+.graph-form button {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  border-radius: 7px;
+  padding: 7px 16px;
+  font-weight: 600;
+}
+
+.buttons button.primary,
+.graph-form button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  min-width: 84px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.stage {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.canvas-wrap {
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+#heatmap {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.legend {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 12px;
+}
+
+.swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.swatch.pos {
+  background: var(--pos);
+}
+
+.swatch.neg {
+  background: var(--neg);
+  margin-left: 6px;
+}
+
+.error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--error);
+  background: var(--error-bg);
+  font-size: 13px;
+}
+
+.readout {
+  padding: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.stats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.stats div {
+  background: var(--bg);
+  border-radius: 7px;
+  padding: 6px 8px;
+}
+
+.stats dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.stats dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart {
+  margin: 0;
+}
+
+.chart figcaption {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart .axis-label {
+  fill: var(--muted);
+  font: 10px var(--mono);
+}
+
+.chart .series {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart .series.loss {
+  stroke: var(--neg);
+}
+
+.chart .series.acc {
+  stroke: var(--accent);
+}
+
+.chart .area.acc {
+  fill: var(--accent);
+  opacity: 0.08;
+}
+
+.chart .empty {
+  fill: var(--muted);
+  font-size: 12px;
+}
+
+.keys {
+  margin: 0;
+  font-size: 12px;
+}
+
+kbd {
+  font: 11px var(--mono);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--bg);
+}
+
+/* ---------------------------------------------------------------- graph -- */
+
+.graph {
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.graph-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px 14px;
+}
+
+.expr-label {
+  flex: 1 1 280px;
+}
+
+.expr-label input {
+  font-size: 15px;
+  padding: 7px 10px;
+}
+
+.vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vars label {
+  width: 92px;
+}
+
+.examples {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chip {
+  font: 12px var(--mono);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.graph .hint,
+.graph .status {
+  margin: 0;
+}
+
+.graph .status {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.graph-out {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  min-height: 120px;
+}
+
+.cgraph {
+  display: block;
+  max-width: none;
+}
+
+.cgraph text {
+  font: 12px var(--mono);
+  fill: var(--ink);
+}
+
+.cg-edge {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.4;
+}
+
+.cg-arrowhead {
+  fill: var(--muted);
+}
+
+.cg-op rect {
+  fill: var(--panel);
+  stroke: var(--muted);
+  stroke-width: 1.2;
+}
+
+.cg-op text {
+  text-anchor: middle;
+  font-weight: 700;
+}
+
+.cg-node rect {
+  fill: var(--panel);
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.cg-input rect {
+  stroke: var(--accent);
+}
+
+.cg-const rect {
+  stroke-dasharray: 4 3;
+}
+
+.cg-output rect {
+  stroke: var(--neg);
+  stroke-width: 2.5;
+}
+
+.cgraph .cg-label {
+  font-weight: 700;
+}
+
+.cgraph .cg-data {
+  fill: var(--muted);
+}
+
+.cgraph .cg-pos {
+  fill: var(--grad-pos);
+}
+
+.cgraph .cg-neg {
+  fill: var(--grad-neg);
+}
+
+.cgraph .cg-zero {
+  fill: var(--muted);
+}
+
+/* ----------------------------------------------------------- responsive -- */
+
+@media (max-width: 1100px) {
+  .train {
+    grid-template-columns: 230px 1fr;
+  }
+
+  .readout {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .readout .stats,
+  .readout .keys {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .top,
+  main {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .train {
+    grid-template-columns: 1fr;
+  }
+
+  .stage {
+    order: -1;
+  }
+
+  .readout {
+    grid-template-columns: 1fr;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
