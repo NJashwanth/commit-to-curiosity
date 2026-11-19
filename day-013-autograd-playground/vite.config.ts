@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 // The core is everything that runs without a browser. `npm run test:cov` fails
 // if its coverage drops under 90%. The DOM glue in ui.ts is exercised by hand
 // and by the Playwright screenshots instead.
-export const CORE_FILES = ["src/engine.ts", "src/rng.ts", "src/nn.ts", "src/optim.ts"];
+export const CORE_FILES = ["src/engine.ts", "src/rng.ts", "src/nn.ts", "src/optim.ts", "src/datasets.ts", "src/train.ts"];
 
 export default defineConfig({
   build: { outDir: "dist", emptyOutDir: true },
