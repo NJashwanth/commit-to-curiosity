@@ -1,0 +1,192 @@
+# A small hand-composed scene: glass, metal and diffuse spheres spelling out a "J",
+# with a few larger spheres around it. Render it with:
+#   cargo run --release -- render scenes/showcase.toml
+
+[camera]
+look_from = [0.9, 2.1, 9.5]
+look_at = [0.25, 2.0, 0.0]
+vfov = 30
+aspect_ratio = 1.7777777777777777
+aperture = 0.12
+# Focus on the J (the plane z = 0); leaving this out would focus on look_at.
+focus_dist = 9.6
+
+[render]
+width = 800
+samples_per_pixel = 200
+max_depth = 50
+seed = 14
+
+[materials.ground]
+type = "lambertian"
+albedo = [0.48, 0.47, 0.45]
+
+[materials.glass]
+type = "dielectric"
+ior = 1.5
+
+[materials.air]
+type = "dielectric"
+ior = 0.6666666666666666
+
+[materials.gold]
+type = "metal"
+albedo = [0.95, 0.72, 0.3]
+fuzz = 0.02
+
+[materials.chrome]
+type = "metal"
+albedo = [0.85, 0.87, 0.9]
+fuzz = 0.0
+
+[materials.brushed]
+type = "metal"
+albedo = [0.6, 0.65, 0.75]
+fuzz = 0.25
+
+[materials.coral]
+type = "lambertian"
+albedo = [0.9, 0.35, 0.3]
+
+[materials.amber]
+type = "lambertian"
+albedo = [0.95, 0.65, 0.15]
+
+[materials.teal]
+type = "lambertian"
+albedo = [0.1, 0.6, 0.55]
+
+[materials.violet]
+type = "lambertian"
+albedo = [0.45, 0.3, 0.8]
+
+[materials.navy]
+type = "lambertian"
+albedo = [0.12, 0.18, 0.4]
+
+# The floor: a huge sphere, so it curves away out of sight.
+[[objects]]
+type = "sphere"
+center = [0, -1000, 0]
+radius = 1000
+material = "ground"
+
+# The top bar of the J: matte coral and amber, centered over the stem.
+[[objects]]
+type = "sphere"
+center = [-0.020, 3.780, 0.0]
+radius = 0.3
+material = "coral"
+
+[[objects]]
+type = "sphere"
+center = [0.600, 3.780, 0.0]
+radius = 0.3
+material = "amber"
+
+[[objects]]
+type = "sphere"
+center = [1.220, 3.780, 0.0]
+radius = 0.3
+material = "coral"
+
+# The stem: polished gold.
+[[objects]]
+type = "sphere"
+center = [0.600, 3.160, 0.0]
+radius = 0.3
+material = "gold"
+
+[[objects]]
+type = "sphere"
+center = [0.600, 2.540, 0.0]
+radius = 0.3
+material = "gold"
+
+[[objects]]
+type = "sphere"
+center = [0.600, 1.920, 0.0]
+radius = 0.3
+material = "gold"
+
+[[objects]]
+type = "sphere"
+center = [0.600, 1.300, 0.0]
+radius = 0.3
+material = "gold"
+
+# The hook: glass between matte spheres, curling up on the left.
+[[objects]]
+type = "sphere"
+center = [0.409, 0.712, 0.0]
+radius = 0.3
+material = "teal"
+
+[[objects]]
+type = "sphere"
+center = [-0.091, 0.349, 0.0]
+radius = 0.3
+material = "glass"
+
+[[objects]]
+type = "sphere"
+center = [-0.709, 0.349, 0.0]
+radius = 0.3
+material = "violet"
+
+[[objects]]
+type = "sphere"
+center = [-1.209, 0.712, 0.0]
+radius = 0.3
+material = "glass"
+
+[[objects]]
+type = "sphere"
+center = [-1.400, 1.300, 0.0]
+radius = 0.3
+material = "teal"
+
+# Around the letter: a big mirror behind it, a hollow glass ball in front,
+# and some smaller spheres to catch reflections.
+[[objects]]
+type = "sphere"
+center = [3.4, 1.5, -3.0]
+radius = 1.5
+material = "chrome"
+
+[[objects]]
+type = "sphere"
+center = [-3.1, 0.75, 1.9]
+radius = 0.75
+material = "glass"
+
+[[objects]]
+type = "sphere"
+center = [-3.1, 0.75, 1.9]
+radius = 0.68
+material = "air"
+
+[[objects]]
+type = "sphere"
+center = [-3.6, 1.1, -2.6]
+radius = 1.1
+material = "navy"
+
+[[objects]]
+type = "sphere"
+center = [2.2, 0.45, 1.8]
+radius = 0.45
+material = "brushed"
+
+[[objects]]
+type = "sphere"
+center = [1.4, 0.25, 2.8]
+radius = 0.25
+material = "coral"
+
+[[objects]]
+type = "sphere"
+center = [-1.6, 0.2, 3.0]
+radius = 0.2
+material = "teal"
+

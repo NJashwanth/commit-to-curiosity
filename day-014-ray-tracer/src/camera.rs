@@ -40,6 +40,11 @@ impl Default for CameraConfig {
 impl CameraConfig {
     /// Check the settings make a usable camera.
     pub fn validate(&self) -> Result<(), String> {
+        // First, because a default focus distance would be 0 here too.
+        let forward = self.look_at - self.look_from;
+        if forward.near_zero() {
+            return Err("look_from and look_at must be different points".into());
+        }
         if !(self.vfov > 0.0 && self.vfov < 180.0) {
             return Err(format!(
                 "vfov must be between 0 and 180 degrees, got {}",
@@ -60,10 +65,6 @@ impl CameraConfig {
                 "focus_dist must be positive, got {}",
                 self.focus_dist
             ));
-        }
-        let forward = self.look_at - self.look_from;
-        if forward.near_zero() {
-            return Err("look_from and look_at must be different points".into());
         }
         if self.vup.cross(forward).near_zero() {
             return Err("vup must not be parallel to the view direction".into());

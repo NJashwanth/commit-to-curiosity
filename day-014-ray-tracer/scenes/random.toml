@@ -1,0 +1,65 @@
+# The classic final scene: three big spheres in a field of small random ones.
+# The small spheres come from [random_field]. It has no seed of its own, so the
+# render seed lays them out and --seed gives a different field:
+#   cargo run --release -- render scenes/random.toml --width 1200 --spp 200 --seed 42
+
+[camera]
+look_from = [13, 2, 3]
+look_at = [0, 0, 0]
+vfov = 20
+aspect_ratio = 1.7777777777777777
+aperture = 0.1
+focus_dist = 10
+
+[render]
+width = 600
+samples_per_pixel = 100
+max_depth = 50
+seed = 42
+
+[materials.ground]
+type = "lambertian"
+albedo = [0.5, 0.5, 0.5]
+
+[materials.glass]
+type = "dielectric"
+ior = 1.5
+
+[materials.brown]
+type = "lambertian"
+albedo = [0.4, 0.2, 0.1]
+
+[materials.mirror]
+type = "metal"
+albedo = [0.7, 0.6, 0.5]
+fuzz = 0.0
+
+[[objects]]
+type = "sphere"
+center = [0, -1000, 0]
+radius = 1000
+material = "ground"
+
+[[objects]]
+type = "sphere"
+center = [0, 1, 0]
+radius = 1
+material = "glass"
+
+[[objects]]
+type = "sphere"
+center = [-4, 1, 0]
+radius = 1
+material = "brown"
+
+[[objects]]
+type = "sphere"
+center = [4, 1, 0]
+radius = 1
+material = "mirror"
+
+# 22 x 22 grid cells from -11 to 10 on x and z, one 0.2-radius sphere per cell
+# unless it would cut into one of the spheres above.
+[random_field]
+extent = 11
+radius = 0.2

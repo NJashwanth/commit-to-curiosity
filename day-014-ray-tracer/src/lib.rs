@@ -7,5 +7,6 @@ pub mod material;
 pub mod ray;
 pub mod render;
 pub mod rng;
+pub mod scene;
 pub mod sphere;
 pub mod vec3;
