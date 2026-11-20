@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use ray_tracer::camera::Camera;
+use ray_tracer::camera::{Camera, CameraConfig};
 use ray_tracer::hittable::HittableList;
 use ray_tracer::material::Material;
 use ray_tracer::render::{RenderSettings, render};
@@ -60,8 +60,18 @@ fn main() -> ExitCode {
     world.add(Sphere::new(Vec3::new(-1.0, 0.0, -1.0), 0.4, air_bubble));
     world.add(Sphere::new(Vec3::new(1.0, 0.0, -1.0), 0.5, gold));
 
-    let height = (args.width as f64 * 9.0 / 16.0).round().max(1.0) as u32;
-    let camera = Camera::new(args.width, height);
+    // Up and to the left, zoomed in, focused on the blue sphere.
+    let look_from = Vec3::new(-3.0, 2.0, 2.0);
+    let look_at = Vec3::new(0.0, 0.0, -1.0);
+    let config = CameraConfig {
+        look_from,
+        look_at,
+        vfov: 25.0,
+        aperture: 0.6,
+        focus_dist: (look_from - Vec3::new(0.0, 0.0, -1.2)).length(),
+        ..CameraConfig::default()
+    };
+    let camera = Camera::new(&config, args.width);
     let settings = RenderSettings {
         samples_per_pixel: args.spp,
         ..RenderSettings::default()

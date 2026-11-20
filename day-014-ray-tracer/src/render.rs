@@ -173,7 +173,7 @@ pub fn render_row(
         for _ in 0..settings.samples_per_pixel {
             let px = x as f64 + rng.random::<f64>();
             let py = y as f64 + rng.random::<f64>();
-            let ray = camera.ray_through(px, py);
+            let ray = camera.ray_through(px, py, &mut rng);
             sum += ray_color(&ray, world, settings.max_depth, &mut rng);
         }
         row.extend_from_slice(&finish_pixel(sum, settings.samples_per_pixel));
@@ -196,10 +196,20 @@ pub fn render(world: &dyn Hittable, camera: &Camera, settings: &RenderSettings) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::camera::CameraConfig;
     use crate::hittable::HittableList;
     use crate::material::Material;
     use crate::sphere::Sphere;
     use crate::vec3::Vec3;
+
+    /// A pinhole camera at the origin looking down -z with a 90 degree field of view.
+    fn test_camera(width: u32, height: u32) -> Camera {
+        let config = CameraConfig {
+            aspect_ratio: width as f64 / height as f64,
+            ..CameraConfig::default()
+        };
+        Camera::new(&config, width)
+    }
 
     fn gray_sphere(center: Vec3, radius: f64) -> Sphere {
         Sphere::new(
@@ -364,7 +374,7 @@ mod tests {
     #[test]
     fn antialiasing_blends_pixels_on_an_edge() {
         // 5x2 image: viewport is 5 wide, so the middle column straddles x = 0.
-        let camera = Camera::new(5, 2);
+        let camera = test_camera(5, 2);
         let one_bounce = |spp| RenderSettings {
             samples_per_pixel: spp,
             max_depth: 1,
@@ -390,7 +400,7 @@ mod tests {
         let mut world = HittableList::new();
         world.add(gray_sphere(Vec3::new(0.0, 0.0, -1.0), 0.5));
         world.add(gray_sphere(Vec3::new(0.0, -100.5, -1.0), 100.0));
-        let camera = Camera::new(32, 18);
+        let camera = test_camera(32, 18);
         let settings = RenderSettings {
             samples_per_pixel: 4,
             max_depth: 8,
@@ -408,9 +418,29 @@ mod tests {
     }
 
     #[test]
+    fn depth_of_field_render_is_also_deterministic() {
+        let mut world = HittableList::new();
+        world.add(gray_sphere(Vec3::new(0.0, 0.0, -1.0), 0.5));
+        let config = CameraConfig {
+            aperture: 0.5,
+            ..CameraConfig::default()
+        };
+        let camera = Camera::new(&config, 24);
+        let settings = RenderSettings {
+            samples_per_pixel: 2,
+            max_depth: 4,
+            seed: 7,
+        };
+        assert_eq!(
+            render(&world, &camera, &settings),
+            render(&world, &camera, &settings)
+        );
+    }
+
+    #[test]
     fn rows_render_independently() {
         let world = half_world();
-        let camera = Camera::new(8, 4);
+        let camera = test_camera(8, 4);
         let settings = RenderSettings {
             samples_per_pixel: 3,
             max_depth: 2,
