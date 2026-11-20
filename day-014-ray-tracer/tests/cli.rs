@@ -16,7 +16,7 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 #[test]
 fn writes_a_png() {
     let dir = temp_dir("png");
-    let out = dir.join("gradient.png");
+    let out = dir.join("sphere.png");
     let status = bin().arg(&out).status().unwrap();
     assert!(status.success());
     let bytes = std::fs::read(&out).unwrap();

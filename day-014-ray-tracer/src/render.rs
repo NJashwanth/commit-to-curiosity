@@ -4,6 +4,9 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
+use crate::camera::Camera;
+use crate::hittable::Hittable;
+use crate::ray::Ray;
 use crate::vec3::Color;
 
 /// An 8-bit RGB image, rows top to bottom.
@@ -86,9 +89,71 @@ pub fn gradient(width: u32, height: u32) -> Image {
     image
 }
 
+/// The background: white at the horizon blending to light blue straight up.
+pub fn sky(ray: &Ray) -> Color {
+    let unit = ray.direction.unit();
+    let a = 0.5 * (unit.y + 1.0);
+    (1.0 - a) * Color::ONE + a * Color::new(0.5, 0.7, 1.0)
+}
+
+/// Color a hit by its surface normal (mapped from [-1, 1] to [0, 1]), or show the sky.
+pub fn normal_color(ray: &Ray, world: &dyn Hittable) -> Color {
+    match world.hit(ray, 0.0, f64::INFINITY) {
+        Some(rec) => 0.5 * (rec.normal + Color::ONE),
+        None => sky(ray),
+    }
+}
+
+/// One ray through the center of each pixel, shaded by surface normal.
+pub fn render_normals(world: &dyn Hittable, camera: &Camera) -> Image {
+    let mut image = Image::new(camera.image_width, camera.image_height);
+    for y in 0..camera.image_height {
+        for x in 0..camera.image_width {
+            let ray = camera.ray_through(x as f64 + 0.5, y as f64 + 0.5);
+            image.set(x, y, color_to_rgb(normal_color(&ray, world)));
+        }
+    }
+    image
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sphere::Sphere;
+    use crate::vec3::Vec3;
+
+    #[test]
+    fn sky_is_white_at_horizon_and_blue_overhead() {
+        let up = sky(&Ray::new(Vec3::ZERO, Vec3::new(0.0, 3.0, 0.0)));
+        assert_eq!(up, Color::new(0.5, 0.7, 1.0));
+        let down = sky(&Ray::new(Vec3::ZERO, Vec3::new(0.0, -1.0, 0.0)));
+        assert_eq!(down, Color::ONE);
+        let level = sky(&Ray::new(Vec3::ZERO, Vec3::new(0.0, 0.0, -1.0)));
+        assert_eq!(level, Color::new(0.75, 0.85, 1.0));
+    }
+
+    #[test]
+    fn normal_shading_of_the_front_of_a_sphere() {
+        let sphere = Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5);
+        let ray = Ray::new(Vec3::ZERO, Vec3::new(0.0, 0.0, -1.0));
+        // Normal (0, 0, 1) maps to (0.5, 0.5, 1).
+        assert_eq!(normal_color(&ray, &sphere), Color::new(0.5, 0.5, 1.0));
+        let miss = Ray::new(Vec3::ZERO, Vec3::new(0.0, 1.0, 0.0));
+        assert_eq!(normal_color(&miss, &sphere), sky(&miss));
+    }
+
+    #[test]
+    fn render_normals_puts_the_sphere_in_the_middle() {
+        let sphere = Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5);
+        let image = render_normals(&sphere, &Camera::new(32, 18));
+        assert_eq!((image.width, image.height), (32, 18));
+        // Center pixel faces the camera: bluish-purple. Corner pixel is sky.
+        let center = image.get(16, 9);
+        assert!(center[2] > 240 && center[0] > 100 && center[0] < 160);
+        let corner = image.get(0, 0);
+        let sky_rgb = color_to_rgb(sky(&Camera::new(32, 18).ray_through(0.5, 0.5)));
+        assert_eq!(corner, sky_rgb);
+    }
 
     #[test]
     fn color_to_rgb_maps_and_clamps() {
