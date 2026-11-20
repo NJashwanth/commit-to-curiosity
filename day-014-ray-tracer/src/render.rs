@@ -4,7 +4,9 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
+use indicatif::{ProgressBar, ProgressStyle};
 use rand::Rng as _;
+use rayon::prelude::*;
 
 use crate::camera::Camera;
 use crate::hittable::Hittable;
@@ -183,14 +185,43 @@ pub fn render_row(
 
 /// Render the whole image.
 pub fn render(world: &dyn Hittable, camera: &Camera, settings: &RenderSettings) -> Image {
+    render_with_progress(world, camera, settings, &ProgressBar::hidden())
+}
+
+/// Render the whole image, rows in parallel on rayon's thread pool, ticking
+/// `progress` once per finished row. Rows are independent and each has its own
+/// seeded random stream, so the result is the same on any number of threads.
+pub fn render_with_progress(
+    world: &dyn Hittable,
+    camera: &Camera,
+    settings: &RenderSettings,
+    progress: &ProgressBar,
+) -> Image {
     let mut image = Image::new(camera.image_width, camera.image_height);
     let row_bytes = camera.image_width as usize * 3;
-    for y in 0..camera.image_height {
-        let start = y as usize * row_bytes;
-        image.pixels[start..start + row_bytes]
-            .copy_from_slice(&render_row(world, camera, settings, y));
-    }
     image
+        .pixels
+        .par_chunks_mut(row_bytes)
+        .enumerate()
+        .for_each(|(y, row)| {
+            row.copy_from_slice(&render_row(world, camera, settings, y as u32));
+            progress.inc(1);
+        });
+    image
+}
+
+/// A progress bar that counts rendered rows on stderr. It hides itself when
+/// stderr isn't a terminal.
+pub fn row_progress_bar(rows: u32) -> ProgressBar {
+    let bar = ProgressBar::new(rows as u64);
+    bar.set_style(
+        ProgressStyle::with_template(
+            "{spinner} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} rows (eta {eta})",
+        )
+        .expect("valid template")
+        .progress_chars("=> "),
+    );
+    bar
 }
 
 #[cfg(test)]
@@ -449,5 +480,58 @@ mod tests {
         let image = render(&world, &camera, &settings);
         let row2 = render_row(&world, &camera, &settings, 2);
         assert_eq!(&image.pixels[2 * 8 * 3..3 * 8 * 3], &row2[..]);
+    }
+
+    fn small_scene() -> HittableList {
+        let mut world = HittableList::new();
+        world.add(gray_sphere(Vec3::new(0.0, -100.5, -1.0), 100.0));
+        world.add(Sphere::new(
+            Vec3::new(-0.6, 0.0, -1.0),
+            0.5,
+            Material::dielectric(1.5),
+        ));
+        world.add(Sphere::new(
+            Vec3::new(0.6, 0.0, -1.0),
+            0.5,
+            Material::metal(Color::new(0.8, 0.6, 0.2), 0.3),
+        ));
+        world
+    }
+
+    #[test]
+    fn thread_count_does_not_change_the_image() {
+        let world = small_scene();
+        let camera = test_camera(32, 18);
+        let settings = RenderSettings {
+            samples_per_pixel: 4,
+            max_depth: 10,
+            seed: 11,
+        };
+        let on = |threads| {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap()
+                .install(|| render(&world, &camera, &settings).png_bytes())
+        };
+        let one = on(1);
+        assert_eq!(on(2), one);
+        assert_eq!(on(8), one);
+    }
+
+    #[test]
+    fn progress_counts_every_row() {
+        let world = small_scene();
+        let camera = test_camera(16, 9);
+        let settings = RenderSettings {
+            samples_per_pixel: 1,
+            max_depth: 3,
+            seed: 1,
+        };
+        let bar = ProgressBar::hidden();
+        bar.set_length(9);
+        render_with_progress(&world, &camera, &settings, &bar);
+        assert_eq!(bar.position(), 9);
+        assert_eq!(row_progress_bar(9).length(), Some(9));
     }
 }

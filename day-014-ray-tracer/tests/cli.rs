@@ -25,6 +25,17 @@ fn writes_a_png() {
     assert!(status.success());
     let bytes = std::fs::read(&out).unwrap();
     assert_eq!(&bytes[..4], b"\x89PNG");
+    let output = bin()
+        .arg(&out)
+        .args(["--width", "16", "--spp", "1", "--quiet"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Rendered 16x9 at 1 spp (5 objects, BVH on, "),
+        "{stdout}"
+    );
+    assert!(stdout.contains("s\nWrote"), "{stdout}");
     // Width 32 at 16:9 is 18 rows. The PNG header stores width and height big-endian.
     assert_eq!(&bytes[16..24], &[0, 0, 0, 32, 0, 0, 0, 18]);
     std::fs::remove_dir_all(&dir).unwrap();

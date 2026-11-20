@@ -8,9 +8,11 @@ description = "A from-scratch path tracer: spheres, diffuse/metal/glass material
 publish = false
 
 [dependencies]
+indicatif = "0.17"
 png = "0.17"
 rand = "0.9"
 rand_pcg = "0.9"
+rayon = "1"
 
 [profile.release]
 codegen-units = 1
