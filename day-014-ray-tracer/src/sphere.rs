@@ -1,6 +1,7 @@
 //! Spheres, the only shape so far.
 
 use crate::hittable::{HitRecord, Hittable};
+use crate::material::Material;
 use crate::ray::Ray;
 use crate::vec3::Point3;
 
@@ -8,11 +9,16 @@ use crate::vec3::Point3;
 pub struct Sphere {
     pub center: Point3,
     pub radius: f64,
+    pub material: Material,
 }
 
 impl Sphere {
-    pub fn new(center: Point3, radius: f64) -> Self {
-        Sphere { center, radius }
+    pub fn new(center: Point3, radius: f64, material: Material) -> Self {
+        Sphere {
+            center,
+            radius,
+            material,
+        }
     }
 }
 
@@ -39,17 +45,21 @@ impl Hittable for Sphere {
             }
         }
         let outward_normal = (ray.at(t) - self.center) / self.radius;
-        Some(HitRecord::new(ray, t, outward_normal))
+        Some(HitRecord::new(ray, t, outward_normal, self.material))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vec3::Vec3;
+    use crate::vec3::{Color, Vec3};
+
+    fn gray() -> Material {
+        Material::lambertian(Color::new(0.5, 0.5, 0.5))
+    }
 
     fn unit_sphere() -> Sphere {
-        Sphere::new(Vec3::ZERO, 1.0)
+        Sphere::new(Vec3::ZERO, 1.0, gray())
     }
 
     fn close(a: f64, b: f64) -> bool {
@@ -141,11 +151,12 @@ mod tests {
 
     #[test]
     fn off_center_sphere_normal_is_unit_length() {
-        let sphere = Sphere::new(Vec3::new(1.0, 2.0, -3.0), 0.5);
+        let sphere = Sphere::new(Vec3::new(1.0, 2.0, -3.0), 0.5, gray());
         let ray = Ray::new(Vec3::ZERO, Vec3::new(1.0, 2.0, -2.6));
         let rec = sphere.hit(&ray, 0.0, f64::INFINITY).unwrap();
         assert!(close(rec.normal.length(), 1.0));
         assert!(close((rec.point - sphere.center).length(), 0.5));
         assert!(rec.front_face);
+        assert_eq!(rec.material, gray());
     }
 }

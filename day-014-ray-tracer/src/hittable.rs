@@ -1,5 +1,6 @@
 //! Anything a ray can hit.
 
+use crate::material::Material;
 use crate::ray::Ray;
 use crate::vec3::{Point3, Vec3};
 
@@ -12,18 +13,21 @@ pub struct HitRecord {
     pub t: f64,
     /// True when the ray hit the outside of the surface.
     pub front_face: bool,
+    /// The material of the surface that was hit.
+    pub material: Material,
 }
 
 impl HitRecord {
     /// Build a record from the geometric outward normal (unit length), flipping it
     /// so it faces the ray. Materials need to know which side they were hit from.
-    pub fn new(ray: &Ray, t: f64, outward_normal: Vec3) -> Self {
+    pub fn new(ray: &Ray, t: f64, outward_normal: Vec3, material: Material) -> Self {
         let (front_face, normal) = face_normal(ray, outward_normal);
         HitRecord {
             point: ray.at(t),
             normal,
             t,
             front_face,
+            material,
         }
     }
 }
@@ -89,6 +93,11 @@ impl Hittable for HittableList {
 mod tests {
     use super::*;
     use crate::sphere::Sphere;
+    use crate::vec3::Color;
+
+    fn sphere(center: Vec3, radius: f64) -> Sphere {
+        Sphere::new(center, radius, Material::lambertian(Color::ONE))
+    }
 
     fn ray_down_z() -> Ray {
         Ray::new(Vec3::new(0.0, 0.0, 10.0), Vec3::new(0.0, 0.0, -1.0))
@@ -97,9 +106,9 @@ mod tests {
     fn row_of_spheres() -> HittableList {
         let mut list = HittableList::new();
         // Added far-to-near so the closest isn't simply the first or last.
-        list.add(Sphere::new(Vec3::new(0.0, 0.0, -5.0), 1.0));
-        list.add(Sphere::new(Vec3::new(0.0, 0.0, 5.0), 1.0));
-        list.add(Sphere::new(Vec3::new(0.0, 0.0, 0.0), 1.0));
+        list.add(sphere(Vec3::new(0.0, 0.0, -5.0), 1.0));
+        list.add(sphere(Vec3::new(0.0, 0.0, 5.0), 1.0));
+        list.add(sphere(Vec3::new(0.0, 0.0, 0.0), 1.0));
         list
     }
 
@@ -161,10 +170,12 @@ mod tests {
     #[test]
     fn record_stores_point_and_facing_normal() {
         let ray = Ray::new(Vec3::new(0.0, 0.0, 5.0), Vec3::new(0.0, 0.0, -1.0));
-        let rec = HitRecord::new(&ray, 4.0, Vec3::new(0.0, 0.0, 1.0));
+        let metal = Material::metal(Color::ONE, 0.0);
+        let rec = HitRecord::new(&ray, 4.0, Vec3::new(0.0, 0.0, 1.0), metal);
         assert_eq!(rec.point, Vec3::new(0.0, 0.0, 1.0));
         assert_eq!(rec.t, 4.0);
         assert!(rec.front_face);
         assert!(rec.normal.dot(ray.direction) < 0.0);
+        assert_eq!(rec.material, metal);
     }
 }

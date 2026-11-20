@@ -10,7 +10,7 @@ use crate::camera::Camera;
 use crate::hittable::Hittable;
 use crate::ray::Ray;
 use crate::rng::{self, Rng};
-use crate::vec3::{Color, random_unit_vector};
+use crate::vec3::Color;
 
 /// An 8-bit RGB image, rows top to bottom.
 #[derive(Debug, Clone, PartialEq)]
@@ -119,22 +119,22 @@ pub fn sky(ray: &Ray) -> Color {
 /// origin slightly inside the surface and the ray hits it again ("shadow acne").
 pub const T_MIN: f64 = 0.001;
 
-/// Follow a ray as it bounces around the scene. Every surface is a gray diffuse
-/// reflector that keeps half the light. After `max_depth` bounces with no escape
-/// to the sky, the path contributes nothing.
+/// Follow a ray as it bounces around the scene, multiplying in each surface's
+/// color, until it escapes to the sky, gets absorbed, or runs out of bounces.
 pub fn ray_color(ray: &Ray, world: &dyn Hittable, max_depth: u32, rng: &mut Rng) -> Color {
     let mut ray = *ray;
     let mut throughput = Color::ONE;
     for _ in 0..max_depth {
-        match world.hit(&ray, T_MIN, f64::INFINITY) {
-            Some(rec) => {
-                let direction = rec.normal + random_unit_vector(rng);
-                ray = Ray::new(rec.point, direction);
-                throughput *= 0.5;
-            }
-            None => return throughput * sky(&ray),
-        }
+        let Some(rec) = world.hit(&ray, T_MIN, f64::INFINITY) else {
+            return throughput * sky(&ray);
+        };
+        let Some(scatter) = rec.material.scatter(&ray, &rec, rng) else {
+            return Color::ZERO;
+        };
+        throughput = throughput * scatter.attenuation;
+        ray = scatter.ray;
     }
+    // Out of bounces: assume no more light arrives along this path.
     Color::ZERO
 }
 
@@ -197,8 +197,17 @@ pub fn render(world: &dyn Hittable, camera: &Camera, settings: &RenderSettings) 
 mod tests {
     use super::*;
     use crate::hittable::HittableList;
+    use crate::material::Material;
     use crate::sphere::Sphere;
     use crate::vec3::Vec3;
+
+    fn gray_sphere(center: Vec3, radius: f64) -> Sphere {
+        Sphere::new(
+            center,
+            radius,
+            Material::lambertian(Color::new(0.5, 0.5, 0.5)),
+        )
+    }
 
     #[test]
     fn color_to_rgb_maps_and_clamps() {
@@ -296,7 +305,7 @@ mod tests {
 
     #[test]
     fn ray_color_is_black_when_out_of_bounces() {
-        let sphere = Sphere::new(Vec3::new(0.0, 0.0, -2.0), 1.0);
+        let sphere = gray_sphere(Vec3::new(0.0, 0.0, -2.0), 1.0);
         let ray = Ray::new(Vec3::ZERO, Vec3::new(0.0, 0.0, -1.0));
         let mut rng = rng::seeded(1);
         assert_eq!(ray_color(&ray, &sphere, 0, &mut rng), Color::ZERO);
@@ -305,9 +314,38 @@ mod tests {
     }
 
     #[test]
+    fn ray_color_absorbed_paths_are_black() {
+        // Fuzzy metal hit at a grazing angle absorbs some rays; those return black.
+        let metal = Sphere::new(
+            Vec3::new(0.0, -100.0, 0.0),
+            100.0,
+            Material::metal(Color::ONE, 1.0),
+        );
+        let ray = Ray::new(Vec3::new(-10.0, 0.5, 0.0), Vec3::new(1.0, -0.05, 0.0));
+        let mut rng = rng::seeded(2);
+        let blacks = (0..500)
+            .filter(|_| ray_color(&ray, &metal, 10, &mut rng) == Color::ZERO)
+            .count();
+        assert!(blacks > 0 && blacks < 500, "{blacks}");
+    }
+
+    #[test]
+    fn glass_in_the_sky_transmits_the_sky() {
+        // Clear glass absorbs nothing, so a ray through a lone glass ball comes out
+        // somewhere in the sky at full strength: every channel between sky colors.
+        let glass = Sphere::new(Vec3::new(0.0, 0.0, -3.0), 1.0, Material::dielectric(1.5));
+        let ray = Ray::new(Vec3::ZERO, Vec3::new(0.1, 0.1, -1.0));
+        let mut rng = rng::seeded(4);
+        for _ in 0..100 {
+            let c = ray_color(&ray, &glass, 50, &mut rng);
+            assert!((0.5..=1.0).contains(&c.x) && c.z == 1.0, "{c:?}");
+        }
+    }
+
+    #[test]
     fn ray_color_halves_light_per_bounce() {
         // From outside a lone convex sphere, one bounce always escapes to the sky.
-        let sphere = Sphere::new(Vec3::new(0.0, 0.0, -2.0), 1.0);
+        let sphere = gray_sphere(Vec3::new(0.0, 0.0, -2.0), 1.0);
         let ray = Ray::new(Vec3::ZERO, Vec3::new(0.0, 0.0, -1.0));
         let mut rng = rng::seeded(5);
         for _ in 0..100 {
@@ -320,7 +358,7 @@ mod tests {
     /// A huge sphere whose surface is (almost) the plane x = 0 just left of the
     /// camera: rays heading left hit it, rays heading right see the sky.
     fn half_world() -> Sphere {
-        Sphere::new(Vec3::new(-1000.0, 0.0, -1.0), 1000.0)
+        gray_sphere(Vec3::new(-1000.0, 0.0, -1.0), 1000.0)
     }
 
     #[test]
@@ -350,8 +388,8 @@ mod tests {
     #[test]
     fn same_seed_gives_identical_bytes() {
         let mut world = HittableList::new();
-        world.add(Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5));
-        world.add(Sphere::new(Vec3::new(0.0, -100.5, -1.0), 100.0));
+        world.add(gray_sphere(Vec3::new(0.0, 0.0, -1.0), 0.5));
+        world.add(gray_sphere(Vec3::new(0.0, -100.5, -1.0), 100.0));
         let camera = Camera::new(32, 18);
         let settings = RenderSettings {
             samples_per_pixel: 4,

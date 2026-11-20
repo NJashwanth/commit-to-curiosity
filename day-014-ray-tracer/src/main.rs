@@ -3,9 +3,10 @@ use std::process::ExitCode;
 
 use ray_tracer::camera::Camera;
 use ray_tracer::hittable::HittableList;
+use ray_tracer::material::Material;
 use ray_tracer::render::{RenderSettings, render};
 use ray_tracer::sphere::Sphere;
-use ray_tracer::vec3::Vec3;
+use ray_tracer::vec3::{Color, Vec3};
 
 struct Args {
     out: PathBuf,
@@ -45,9 +46,19 @@ fn main() -> ExitCode {
         }
     };
 
+    let ground = Material::lambertian(Color::new(0.8, 0.8, 0.0));
+    let matte_blue = Material::lambertian(Color::new(0.1, 0.2, 0.5));
+    let glass = Material::dielectric(1.5);
+    // Inside the glass, a sphere of air: a hollow glass ball.
+    let air_bubble = Material::dielectric(1.0 / 1.5);
+    let gold = Material::metal(Color::new(0.8, 0.6, 0.2), 0.2);
+
     let mut world = HittableList::new();
-    world.add(Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5));
-    world.add(Sphere::new(Vec3::new(0.0, -100.5, -1.0), 100.0));
+    world.add(Sphere::new(Vec3::new(0.0, -100.5, -1.0), 100.0, ground));
+    world.add(Sphere::new(Vec3::new(0.0, 0.0, -1.2), 0.5, matte_blue));
+    world.add(Sphere::new(Vec3::new(-1.0, 0.0, -1.0), 0.5, glass));
+    world.add(Sphere::new(Vec3::new(-1.0, 0.0, -1.0), 0.4, air_bubble));
+    world.add(Sphere::new(Vec3::new(1.0, 0.0, -1.0), 0.5, gold));
 
     let height = (args.width as f64 * 9.0 / 16.0).round().max(1.0) as u32;
     let camera = Camera::new(args.width, height);
