@@ -1,0 +1,16 @@
+[package]
+name = "ray-tracer"
+version = "0.1.0"
+edition = "2024"
+authors = ["Jashwanth Neela"]
+license = "MIT"
+description = "A from-scratch path tracer: spheres, diffuse/metal/glass materials, depth of field, BVH, rayon and TOML scenes"
+publish = false
+
+[dependencies]
+png = "0.17"
+rand = "0.9"
+rand_pcg = "0.9"
+
+[profile.release]
+codegen-units = 1
