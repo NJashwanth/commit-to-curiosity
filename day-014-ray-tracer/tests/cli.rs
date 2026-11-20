@@ -31,6 +31,27 @@ fn writes_a_png() {
 }
 
 #[test]
+fn bvh_and_brute_force_render_the_same_bytes() {
+    let dir = temp_dir("bvh");
+    let with = dir.join("bvh.png");
+    let without = dir.join("list.png");
+    for (out, extra) in [(&with, None), (&without, Some("--no-bvh"))] {
+        let status = bin()
+            .arg(out)
+            .args(["--width", "40", "--spp", "3"])
+            .args(extra)
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+    assert_eq!(
+        std::fs::read(&with).unwrap(),
+        std::fs::read(&without).unwrap()
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn rejects_bad_numbers() {
     let output = bin().args(["--spp", "zero"]).output().unwrap();
     assert!(!output.status.success());

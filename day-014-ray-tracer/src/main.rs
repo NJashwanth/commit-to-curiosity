@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use ray_tracer::bvh::Bvh;
 use ray_tracer::camera::{Camera, CameraConfig};
-use ray_tracer::hittable::HittableList;
+use ray_tracer::hittable::{Hittable, HittableList};
 use ray_tracer::material::Material;
 use ray_tracer::render::{RenderSettings, render};
 use ray_tracer::sphere::Sphere;
@@ -12,6 +13,7 @@ struct Args {
     out: PathBuf,
     width: u32,
     spp: u32,
+    bvh: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -19,6 +21,7 @@ fn parse_args() -> Result<Args, String> {
         out: PathBuf::from("renders/demo.png"),
         width: 400,
         spp: 100,
+        bvh: true,
     };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
@@ -31,6 +34,7 @@ fn parse_args() -> Result<Args, String> {
         match arg.as_str() {
             "--width" => args.width = number("--width")?,
             "--spp" => args.spp = number("--spp")?,
+            "--no-bvh" => args.bvh = false,
             _ => args.out = PathBuf::from(arg),
         }
     }
@@ -76,7 +80,12 @@ fn main() -> ExitCode {
         samples_per_pixel: args.spp,
         ..RenderSettings::default()
     };
-    match render(&world, &camera, &settings).save_png(&args.out) {
+    let world: Box<dyn Hittable> = if args.bvh {
+        Box::new(Bvh::new(world.objects))
+    } else {
+        Box::new(world)
+    };
+    match render(world.as_ref(), &camera, &settings).save_png(&args.out) {
         Ok(()) => {
             println!("Wrote {}", args.out.display());
             ExitCode::SUCCESS

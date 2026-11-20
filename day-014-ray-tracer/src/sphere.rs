@@ -1,9 +1,10 @@
 //! Spheres, the only shape so far.
 
+use crate::bvh::Aabb;
 use crate::hittable::{HitRecord, Hittable};
 use crate::material::Material;
 use crate::ray::Ray;
-use crate::vec3::Point3;
+use crate::vec3::{Point3, Vec3};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sphere {
@@ -47,12 +48,17 @@ impl Hittable for Sphere {
         let outward_normal = (ray.at(t) - self.center) / self.radius;
         Some(HitRecord::new(ray, t, outward_normal, self.material))
     }
+
+    fn bounding_box(&self) -> Aabb {
+        let r = Vec3::new(self.radius, self.radius, self.radius);
+        Aabb::new(self.center - r, self.center + r)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vec3::{Color, Vec3};
+    use crate::vec3::Color;
 
     fn gray() -> Material {
         Material::lambertian(Color::new(0.5, 0.5, 0.5))

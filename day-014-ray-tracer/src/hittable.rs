@@ -1,5 +1,6 @@
 //! Anything a ray can hit.
 
+use crate::bvh::Aabb;
 use crate::material::Material;
 use crate::ray::Ray;
 use crate::vec3::{Point3, Vec3};
@@ -49,6 +50,9 @@ pub fn face_normal(ray: &Ray, outward_normal: Vec3) -> (bool, Vec3) {
 pub trait Hittable: Send + Sync {
     /// The nearest hit with `t_min < t < t_max`, if any.
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord>;
+
+    /// A box that contains the whole shape, used to build the BVH.
+    fn bounding_box(&self) -> Aabb;
 }
 
 /// A plain list of objects. A ray is tested against every one, keeping the closest.
@@ -86,6 +90,12 @@ impl Hittable for HittableList {
             }
         }
         closest
+    }
+
+    fn bounding_box(&self) -> Aabb {
+        self.objects
+            .iter()
+            .fold(Aabb::EMPTY, |acc, o| acc.surrounding(o.bounding_box()))
     }
 }
 
@@ -127,6 +137,14 @@ mod tests {
         // Skip the first sphere entirely (t in 4..6): the next surface is at t = 9.
         assert_eq!(list.hit(&ray_down_z(), 6.5, f64::INFINITY).unwrap().t, 9.0);
         assert!(list.hit(&ray_down_z(), 0.0, 3.0).is_none());
+    }
+
+    #[test]
+    fn list_bounding_box_covers_every_object() {
+        let b = row_of_spheres().bounding_box();
+        assert_eq!(b.min, Vec3::new(-1.0, -1.0, -6.0));
+        assert_eq!(b.max, Vec3::new(1.0, 1.0, 6.0));
+        assert_eq!(HittableList::new().bounding_box(), Aabb::EMPTY);
     }
 
     #[test]

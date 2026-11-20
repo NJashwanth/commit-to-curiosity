@@ -1,5 +1,6 @@
 //! A path tracer written from scratch, following the ideas in "Ray Tracing in One Weekend".
 
+pub mod bvh;
 pub mod camera;
 pub mod hittable;
 pub mod material;
