@@ -1,13 +1,16 @@
-//! Turning colors into pixels and pixels into PNG files.
+//! Tracing rays into colors, colors into pixels, and pixels into PNG files.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
+use rand::Rng as _;
+
 use crate::camera::Camera;
 use crate::hittable::Hittable;
 use crate::ray::Ray;
-use crate::vec3::Color;
+use crate::rng::{self, Rng};
+use crate::vec3::{Color, random_unit_vector};
 
 /// An 8-bit RGB image, rows top to bottom.
 #[derive(Debug, Clone, PartialEq)]
@@ -67,13 +70,29 @@ impl Image {
     }
 }
 
-/// Map a linear color in `[0, 1]` to bytes, clamping anything out of range.
+/// Map a color in `[0, 1]` to bytes, clamping anything out of range.
 pub fn color_to_rgb(color: Color) -> [u8; 3] {
     let byte = |c: f64| {
         let c = if c.is_nan() { 0.0 } else { c.clamp(0.0, 0.999) };
         (256.0 * c) as u8
     };
     [byte(color.x), byte(color.y), byte(color.z)]
+}
+
+/// Gamma 2: image viewers expect brightness on a curve, not linear light.
+/// Without this, a surface reflecting 50% of light looks far too dark.
+pub fn linear_to_gamma(linear: f64) -> f64 {
+    if linear > 0.0 { linear.sqrt() } else { 0.0 }
+}
+
+/// Average the samples of one pixel, gamma-correct, and convert to bytes.
+pub fn finish_pixel(sum: Color, samples: u32) -> [u8; 3] {
+    let avg = sum / samples as f64;
+    color_to_rgb(Color::new(
+        linear_to_gamma(avg.x),
+        linear_to_gamma(avg.y),
+        linear_to_gamma(avg.z),
+    ))
 }
 
 /// The "hello world" image: red grows left to right, green grows bottom to top.
@@ -96,22 +115,80 @@ pub fn sky(ray: &Ray) -> Color {
     (1.0 - a) * Color::ONE + a * Color::new(0.5, 0.7, 1.0)
 }
 
-/// Color a hit by its surface normal (mapped from [-1, 1] to [0, 1]), or show the sky.
-pub fn normal_color(ray: &Ray, world: &dyn Hittable) -> Color {
-    match world.hit(ray, 0.0, f64::INFINITY) {
-        Some(rec) => 0.5 * (rec.normal + Color::ONE),
-        None => sky(ray),
+/// Surfaces start this far along a bounced ray. Without it, rounding puts the new
+/// origin slightly inside the surface and the ray hits it again ("shadow acne").
+pub const T_MIN: f64 = 0.001;
+
+/// Follow a ray as it bounces around the scene. Every surface is a gray diffuse
+/// reflector that keeps half the light. After `max_depth` bounces with no escape
+/// to the sky, the path contributes nothing.
+pub fn ray_color(ray: &Ray, world: &dyn Hittable, max_depth: u32, rng: &mut Rng) -> Color {
+    let mut ray = *ray;
+    let mut throughput = Color::ONE;
+    for _ in 0..max_depth {
+        match world.hit(&ray, T_MIN, f64::INFINITY) {
+            Some(rec) => {
+                let direction = rec.normal + random_unit_vector(rng);
+                ray = Ray::new(rec.point, direction);
+                throughput *= 0.5;
+            }
+            None => return throughput * sky(&ray),
+        }
+    }
+    Color::ZERO
+}
+
+/// How much work to do per pixel.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RenderSettings {
+    /// Rays per pixel, each through a random point inside the pixel (antialiasing).
+    pub samples_per_pixel: u32,
+    /// Maximum bounces per ray.
+    pub max_depth: u32,
+    pub seed: u64,
+}
+
+impl Default for RenderSettings {
+    fn default() -> Self {
+        RenderSettings {
+            samples_per_pixel: 100,
+            max_depth: 50,
+            seed: 1,
+        }
     }
 }
 
-/// One ray through the center of each pixel, shaded by surface normal.
-pub fn render_normals(world: &dyn Hittable, camera: &Camera) -> Image {
-    let mut image = Image::new(camera.image_width, camera.image_height);
-    for y in 0..camera.image_height {
-        for x in 0..camera.image_width {
-            let ray = camera.ray_through(x as f64 + 0.5, y as f64 + 0.5);
-            image.set(x, y, color_to_rgb(normal_color(&ray, world)));
+/// Render one row. Each row has its own random stream, so a row's pixels don't
+/// depend on which rows were rendered before it.
+pub fn render_row(
+    world: &dyn Hittable,
+    camera: &Camera,
+    settings: &RenderSettings,
+    y: u32,
+) -> Vec<u8> {
+    let mut rng = rng::stream(settings.seed, y as u64);
+    let mut row = Vec::with_capacity(camera.image_width as usize * 3);
+    for x in 0..camera.image_width {
+        let mut sum = Color::ZERO;
+        for _ in 0..settings.samples_per_pixel {
+            let px = x as f64 + rng.random::<f64>();
+            let py = y as f64 + rng.random::<f64>();
+            let ray = camera.ray_through(px, py);
+            sum += ray_color(&ray, world, settings.max_depth, &mut rng);
         }
+        row.extend_from_slice(&finish_pixel(sum, settings.samples_per_pixel));
+    }
+    row
+}
+
+/// Render the whole image.
+pub fn render(world: &dyn Hittable, camera: &Camera, settings: &RenderSettings) -> Image {
+    let mut image = Image::new(camera.image_width, camera.image_height);
+    let row_bytes = camera.image_width as usize * 3;
+    for y in 0..camera.image_height {
+        let start = y as usize * row_bytes;
+        image.pixels[start..start + row_bytes]
+            .copy_from_slice(&render_row(world, camera, settings, y));
     }
     image
 }
@@ -119,47 +196,30 @@ pub fn render_normals(world: &dyn Hittable, camera: &Camera) -> Image {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hittable::HittableList;
     use crate::sphere::Sphere;
     use crate::vec3::Vec3;
-
-    #[test]
-    fn sky_is_white_at_horizon_and_blue_overhead() {
-        let up = sky(&Ray::new(Vec3::ZERO, Vec3::new(0.0, 3.0, 0.0)));
-        assert_eq!(up, Color::new(0.5, 0.7, 1.0));
-        let down = sky(&Ray::new(Vec3::ZERO, Vec3::new(0.0, -1.0, 0.0)));
-        assert_eq!(down, Color::ONE);
-        let level = sky(&Ray::new(Vec3::ZERO, Vec3::new(0.0, 0.0, -1.0)));
-        assert_eq!(level, Color::new(0.75, 0.85, 1.0));
-    }
-
-    #[test]
-    fn normal_shading_of_the_front_of_a_sphere() {
-        let sphere = Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5);
-        let ray = Ray::new(Vec3::ZERO, Vec3::new(0.0, 0.0, -1.0));
-        // Normal (0, 0, 1) maps to (0.5, 0.5, 1).
-        assert_eq!(normal_color(&ray, &sphere), Color::new(0.5, 0.5, 1.0));
-        let miss = Ray::new(Vec3::ZERO, Vec3::new(0.0, 1.0, 0.0));
-        assert_eq!(normal_color(&miss, &sphere), sky(&miss));
-    }
-
-    #[test]
-    fn render_normals_puts_the_sphere_in_the_middle() {
-        let sphere = Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5);
-        let image = render_normals(&sphere, &Camera::new(32, 18));
-        assert_eq!((image.width, image.height), (32, 18));
-        // Center pixel faces the camera: bluish-purple. Corner pixel is sky.
-        let center = image.get(16, 9);
-        assert!(center[2] > 240 && center[0] > 100 && center[0] < 160);
-        let corner = image.get(0, 0);
-        let sky_rgb = color_to_rgb(sky(&Camera::new(32, 18).ray_through(0.5, 0.5)));
-        assert_eq!(corner, sky_rgb);
-    }
 
     #[test]
     fn color_to_rgb_maps_and_clamps() {
         assert_eq!(color_to_rgb(Color::new(0.0, 0.5, 1.0)), [0, 128, 255]);
         assert_eq!(color_to_rgb(Color::new(-1.0, 2.0, f64::NAN)), [0, 255, 0]);
         assert_eq!(color_to_rgb(Color::new(0.25, 0.75, 0.999)), [64, 192, 255]);
+    }
+
+    #[test]
+    fn gamma_is_square_root() {
+        assert_eq!(linear_to_gamma(0.25), 0.5);
+        assert_eq!(linear_to_gamma(1.0), 1.0);
+        assert_eq!(linear_to_gamma(0.0), 0.0);
+        assert_eq!(linear_to_gamma(-0.5), 0.0);
+    }
+
+    #[test]
+    fn finish_pixel_averages_then_gamma_corrects() {
+        // Four samples summing to 1.0 average to 0.25, which gamma maps to 0.5.
+        let sum = Color::new(1.0, 0.0, 4.0);
+        assert_eq!(finish_pixel(sum, 4), [128, 0, 255]);
     }
 
     #[test]
@@ -214,5 +274,112 @@ mod tests {
         std::fs::write(&file, b"x").unwrap();
         assert!(gradient(2, 2).save_png(&file.join("out.png")).is_err());
         std::fs::remove_file(&file).unwrap();
+    }
+
+    #[test]
+    fn sky_is_white_at_horizon_and_blue_overhead() {
+        let up = sky(&Ray::new(Vec3::ZERO, Vec3::new(0.0, 3.0, 0.0)));
+        assert_eq!(up, Color::new(0.5, 0.7, 1.0));
+        let down = sky(&Ray::new(Vec3::ZERO, Vec3::new(0.0, -1.0, 0.0)));
+        assert_eq!(down, Color::ONE);
+        let level = sky(&Ray::new(Vec3::ZERO, Vec3::new(0.0, 0.0, -1.0)));
+        assert_eq!(level, Color::new(0.75, 0.85, 1.0));
+    }
+
+    #[test]
+    fn ray_color_misses_show_the_sky() {
+        let world = HittableList::new();
+        let ray = Ray::new(Vec3::ZERO, Vec3::new(0.3, 0.4, -1.0));
+        let mut rng = rng::seeded(1);
+        assert_eq!(ray_color(&ray, &world, 10, &mut rng), sky(&ray));
+    }
+
+    #[test]
+    fn ray_color_is_black_when_out_of_bounces() {
+        let sphere = Sphere::new(Vec3::new(0.0, 0.0, -2.0), 1.0);
+        let ray = Ray::new(Vec3::ZERO, Vec3::new(0.0, 0.0, -1.0));
+        let mut rng = rng::seeded(1);
+        assert_eq!(ray_color(&ray, &sphere, 0, &mut rng), Color::ZERO);
+        // One bounce: it hits the sphere and has no bounces left to reach the sky.
+        assert_eq!(ray_color(&ray, &sphere, 1, &mut rng), Color::ZERO);
+    }
+
+    #[test]
+    fn ray_color_halves_light_per_bounce() {
+        // From outside a lone convex sphere, one bounce always escapes to the sky.
+        let sphere = Sphere::new(Vec3::new(0.0, 0.0, -2.0), 1.0);
+        let ray = Ray::new(Vec3::ZERO, Vec3::new(0.0, 0.0, -1.0));
+        let mut rng = rng::seeded(5);
+        for _ in 0..100 {
+            let c = ray_color(&ray, &sphere, 5, &mut rng);
+            // Half of a sky color: between (0.25, 0.35, 0.5) and (0.5, 0.5, 0.5).
+            assert!(c.z == 0.5 && (0.25..=0.5).contains(&c.x));
+        }
+    }
+
+    /// A huge sphere whose surface is (almost) the plane x = 0 just left of the
+    /// camera: rays heading left hit it, rays heading right see the sky.
+    fn half_world() -> Sphere {
+        Sphere::new(Vec3::new(-1000.0, 0.0, -1.0), 1000.0)
+    }
+
+    #[test]
+    fn antialiasing_blends_pixels_on_an_edge() {
+        // 5x2 image: viewport is 5 wide, so the middle column straddles x = 0.
+        let camera = Camera::new(5, 2);
+        let one_bounce = |spp| RenderSettings {
+            samples_per_pixel: spp,
+            max_depth: 1,
+            seed: 3,
+        };
+        let sharp = render(&half_world(), &camera, &one_bounce(1));
+        let smooth = render(&half_world(), &camera, &one_bounce(256));
+
+        // Left columns hit the black wall, right columns see the sky.
+        assert_eq!(smooth.get(0, 0), [0, 0, 0]);
+        assert_eq!(smooth.get(1, 1), [0, 0, 0]);
+        assert!(smooth.get(4, 0)[2] == 255);
+
+        // With one sample the edge pixel is all-or-nothing; with many it's in between.
+        let edge = sharp.get(2, 0);
+        assert!(edge == [0, 0, 0] || edge[2] == 255);
+        let blended = smooth.get(2, 0);
+        assert!(blended[2] > 100 && blended[2] < 250, "{blended:?}");
+    }
+
+    #[test]
+    fn same_seed_gives_identical_bytes() {
+        let mut world = HittableList::new();
+        world.add(Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5));
+        world.add(Sphere::new(Vec3::new(0.0, -100.5, -1.0), 100.0));
+        let camera = Camera::new(32, 18);
+        let settings = RenderSettings {
+            samples_per_pixel: 4,
+            max_depth: 8,
+            seed: 42,
+        };
+        let a = render(&world, &camera, &settings).png_bytes();
+        let b = render(&world, &camera, &settings).png_bytes();
+        assert_eq!(a, b);
+
+        let other = RenderSettings {
+            seed: 43,
+            ..settings
+        };
+        assert_ne!(render(&world, &camera, &other).png_bytes(), a);
+    }
+
+    #[test]
+    fn rows_render_independently() {
+        let world = half_world();
+        let camera = Camera::new(8, 4);
+        let settings = RenderSettings {
+            samples_per_pixel: 3,
+            max_depth: 2,
+            seed: 9,
+        };
+        let image = render(&world, &camera, &settings);
+        let row2 = render_row(&world, &camera, &settings, 2);
+        assert_eq!(&image.pixels[2 * 8 * 3..3 * 8 * 3], &row2[..]);
     }
 }

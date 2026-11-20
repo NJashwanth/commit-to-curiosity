@@ -16,12 +16,25 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 #[test]
 fn writes_a_png() {
     let dir = temp_dir("png");
-    let out = dir.join("sphere.png");
-    let status = bin().arg(&out).status().unwrap();
+    let out = dir.join("demo.png");
+    let status = bin()
+        .arg(&out)
+        .args(["--width", "32", "--spp", "2"])
+        .status()
+        .unwrap();
     assert!(status.success());
     let bytes = std::fs::read(&out).unwrap();
     assert_eq!(&bytes[..4], b"\x89PNG");
+    // Width 32 at 16:9 is 18 rows. The PNG header stores width and height big-endian.
+    assert_eq!(&bytes[16..24], &[0, 0, 0, 32, 0, 0, 0, 18]);
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn rejects_bad_numbers() {
+    let output = bin().args(["--spp", "zero"]).output().unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("--spp needs a positive number"));
 }
 
 #[test]
@@ -29,7 +42,11 @@ fn reports_unwritable_output() {
     let dir = temp_dir("bad");
     let blocker = dir.join("file");
     std::fs::write(&blocker, b"x").unwrap();
-    let output = bin().arg(blocker.join("out.png")).output().unwrap();
+    let output = bin()
+        .arg(blocker.join("out.png"))
+        .args(["--width", "8", "--spp", "1"])
+        .output()
+        .unwrap();
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("could not write"));
     std::fs::remove_dir_all(&dir).unwrap();

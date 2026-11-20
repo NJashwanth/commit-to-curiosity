@@ -47,9 +47,92 @@ pub trait Hittable: Send + Sync {
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord>;
 }
 
+/// A plain list of objects. A ray is tested against every one, keeping the closest.
+#[derive(Default)]
+pub struct HittableList {
+    pub objects: Vec<Box<dyn Hittable>>,
+}
+
+impl HittableList {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn add<H: Hittable + 'static>(&mut self, object: H) {
+        self.objects.push(Box::new(object));
+    }
+
+    pub fn len(&self) -> usize {
+        self.objects.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.objects.is_empty()
+    }
+}
+
+impl Hittable for HittableList {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
+        let mut closest: Option<HitRecord> = None;
+        for object in &self.objects {
+            // Anything farther than the best hit so far can't win.
+            let limit = closest.map_or(t_max, |rec| rec.t);
+            if let Some(rec) = object.hit(ray, t_min, limit) {
+                closest = Some(rec);
+            }
+        }
+        closest
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sphere::Sphere;
+
+    fn ray_down_z() -> Ray {
+        Ray::new(Vec3::new(0.0, 0.0, 10.0), Vec3::new(0.0, 0.0, -1.0))
+    }
+
+    fn row_of_spheres() -> HittableList {
+        let mut list = HittableList::new();
+        // Added far-to-near so the closest isn't simply the first or last.
+        list.add(Sphere::new(Vec3::new(0.0, 0.0, -5.0), 1.0));
+        list.add(Sphere::new(Vec3::new(0.0, 0.0, 5.0), 1.0));
+        list.add(Sphere::new(Vec3::new(0.0, 0.0, 0.0), 1.0));
+        list
+    }
+
+    #[test]
+    fn list_returns_the_closest_hit() {
+        let list = row_of_spheres();
+        assert_eq!(list.len(), 3);
+        let rec = list.hit(&ray_down_z(), 0.0, f64::INFINITY).unwrap();
+        assert_eq!(rec.t, 4.0);
+        assert_eq!(rec.point, Vec3::new(0.0, 0.0, 6.0));
+    }
+
+    #[test]
+    fn list_respects_t_bounds() {
+        let list = row_of_spheres();
+        // Skip the first sphere entirely (t in 4..6): the next surface is at t = 9.
+        assert_eq!(list.hit(&ray_down_z(), 6.5, f64::INFINITY).unwrap().t, 9.0);
+        assert!(list.hit(&ray_down_z(), 0.0, 3.0).is_none());
+    }
+
+    #[test]
+    fn empty_list_never_hits() {
+        let list = HittableList::new();
+        assert!(list.is_empty());
+        assert!(list.hit(&ray_down_z(), 0.0, f64::INFINITY).is_none());
+    }
+
+    #[test]
+    fn list_misses_when_nothing_is_in_the_way() {
+        let list = row_of_spheres();
+        let ray = Ray::new(Vec3::new(5.0, 0.0, 10.0), Vec3::new(0.0, 0.0, -1.0));
+        assert!(list.hit(&ray, 0.0, f64::INFINITY).is_none());
+    }
 
     #[test]
     fn face_normal_keeps_outward_normal_for_outside_hits() {
