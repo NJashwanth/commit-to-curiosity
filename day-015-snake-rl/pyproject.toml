@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snake-rl"
+version = "0.1.0"
+description = "Snake environment with random, tabular Q-learning and DQN agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Jashwanth Neela" }]
+dependencies = [
+    "numpy>=1.24",
+    "torch>=2.2",
+    "matplotlib>=3.7",
+    "pillow>=10.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+
+[tool.setuptools]
+py-modules = ["env", "replay", "train", "compare", "render", "watch"]
+packages = ["agents"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["."]
+omit = ["tests/*"]

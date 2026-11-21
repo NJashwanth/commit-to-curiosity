@@ -1,0 +1,6 @@
+# training outputs (regenerate with train.py)
+checkpoints/
+runs/
+*.csv
+*.pt
+.coverage
