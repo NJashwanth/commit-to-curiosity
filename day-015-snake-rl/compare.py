@@ -8,8 +8,7 @@ import argparse
 import statistics
 from pathlib import Path
 
-from train import CKPT_EXT, env_for, evaluate, load_agent
-from agents import make_agent
+from train import agent_from_checkpoint, env_for, evaluate
 
 AGENTS = ("random", "qlearn", "dqn")
 
@@ -22,13 +21,7 @@ def compare(episodes=200, seed=1000, size=12, ckpt_dir="checkpoints", shaping=Tr
     """Returns {agent: stats}. Every agent plays the same seeded boards."""
     results = {}
     for name in agents:
-        if name == "random":
-            agent = make_agent("random", seed=seed)
-        else:
-            path = Path(ckpt_dir) / f"{name}_best{CKPT_EXT[name]}"
-            if not path.exists():
-                raise FileNotFoundError(f"{path} not found, run: python train.py --agent {name}")
-            agent = load_agent(name, path)
+        agent = agent_from_checkpoint(name, ckpt_dir, seed=seed)
         env = env_for(agent, size=size, shaping=shaping)
         results[name] = summarize(evaluate(agent, env, episodes, seed=seed))
     return results

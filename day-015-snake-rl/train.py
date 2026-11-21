@@ -44,6 +44,16 @@ def load_agent(name, path, seed=None):
     raise ValueError(f"no checkpoints for agent {name!r}")
 
 
+def agent_from_checkpoint(name, ckpt_dir="checkpoints", seed=None):
+    """Random agent, or the saved best checkpoint of qlearn / dqn."""
+    if name == "random":
+        return make_agent("random", seed=seed)
+    path = Path(ckpt_dir) / f"{name}_best{CKPT_EXT[name]}"
+    if not path.exists():
+        raise FileNotFoundError(f"{path} not found, run: python train.py --agent {name}")
+    return load_agent(name, path)
+
+
 def run_episode(env, agent, learn=True, seed=None):
     """Play one episode. Returns (score, steps, mean_loss or None)."""
     obs = env.reset(seed=seed)
