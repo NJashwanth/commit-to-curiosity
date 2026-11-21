@@ -143,3 +143,10 @@ def test_compare_without_checkpoints_explains(tmp_path, capsys):
         compare_mod.compare(2, ckpt_dir=tmp_path)
     assert compare_mod.main(["--episodes", "2", "--ckpt-dir", str(tmp_path)]) == 1
     assert "train.py" in capsys.readouterr().out
+
+
+def test_train_cli_random_has_no_best_checkpoint(tmp_path, capsys):
+    code = train_mod.main(["--agent", "random", "--episodes", "5", "--size", "6", "--runs-dir", str(tmp_path / "r"),
+                           "--ckpt-dir", str(tmp_path / "c"), "--plot", ""])
+    assert code == 0
+    assert "best avg100" not in capsys.readouterr().out

@@ -174,7 +174,8 @@ def main(argv=None):
     result = train(args.agent, args.episodes, seed=args.seed, size=args.size, shaping=not args.no_shaping,
                    state_mode=args.state, tag=args.tag, runs_dir=args.runs_dir, ckpt_dir=args.ckpt_dir,
                    hp=parse_hp(args.hp))
-    print(f"best avg100 {result['best_avg100']:.2f}  log {result['csv']}")
+    best = result["best_avg100"]
+    print(f"best avg100 {best:.2f}  log {result['csv']}" if best > float("-inf") else f"log {result['csv']}")
     if args.plot:
         print(f"chart {plot_curves(args.runs_dir, args.plot)}")
     return 0
