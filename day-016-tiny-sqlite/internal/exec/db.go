@@ -2,6 +2,7 @@
 package exec
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/NJashwanth/commit-to-curiosity/day-016-tiny-sqlite/internal/pager"
 	"github.com/NJashwanth/commit-to-curiosity/day-016-tiny-sqlite/internal/record"
 	"github.com/NJashwanth/commit-to-curiosity/day-016-tiny-sqlite/internal/sql"
+	"github.com/NJashwanth/commit-to-curiosity/day-016-tiny-sqlite/internal/txn"
 )
 
 // Result is what a statement produces.
@@ -23,6 +25,7 @@ type Result struct {
 
 // DB is an open database.
 type DB struct {
+	tm  *txn.Manager
 	p   *pager.Pager
 	cat *catalog.Catalog
 	// treeCfg is only ever non-zero in tests that want small nodes.
@@ -35,22 +38,29 @@ type Options struct {
 	Tree  btree.Config
 }
 
-// Open opens (creating if needed) the database at path.
+// Open opens (creating if needed) the database at path. If a previous process
+// died in the middle of a commit, the journal is rolled back first.
 func Open(path string, opts Options) (*DB, error) {
-	p, err := pager.Open(path, opts.Pager)
+	tm, err := txn.Open(path, opts.Pager)
 	if err != nil {
 		return nil, err
 	}
-	cat, err := catalog.Load(p)
+	cat, err := catalog.Load(tm.P)
 	if err != nil {
-		p.Close()
+		tm.Close()
 		return nil, err
 	}
-	return &DB{p: p, cat: cat, treeCfg: opts.Tree}, nil
+	return &DB{tm: tm, p: tm.P, cat: cat, treeCfg: opts.Tree}, nil
 }
 
-// Close closes the database file.
-func (db *DB) Close() error { return db.p.Close() }
+// Close rolls back any open transaction and closes the database file.
+func (db *DB) Close() error { return db.tm.Close() }
+
+// Recovered reports whether Open had to roll back an interrupted commit.
+func (db *DB) Recovered() bool { return db.tm.Recovered() }
+
+// TxnManager exposes the transaction manager (used by tests to inject crashes).
+func (db *DB) TxnManager() *txn.Manager { return db.tm }
 
 // Run parses and executes every statement in src, printing results to w.
 // It stops at the first error.
@@ -71,15 +81,63 @@ func (db *DB) Run(src string, w io.Writer) error {
 	return nil
 }
 
-// Exec executes one statement. Every successful statement is flushed to disk
-// before it returns (autocommit).
+// Exec executes one statement. Outside BEGIN ... COMMIT every statement runs
+// in its own transaction (autocommit). Inside one, a statement that fails is
+// undone on its own and the transaction stays open.
 func (db *DB) Exec(st sql.Stmt) (*Result, error) {
+	switch st.(type) {
+	case *sql.Begin:
+		if err := db.tm.Begin(); err != nil {
+			if errors.Is(err, txn.ErrTxnActive) {
+				return nil, errors.New("cannot start a transaction within a transaction")
+			}
+			return nil, err
+		}
+		return &Result{Message: "Transaction started."}, nil
+	case *sql.Commit:
+		if !db.tm.Active() {
+			return nil, errors.New("cannot commit: no transaction is active")
+		}
+		if err := db.tm.Commit(); err != nil {
+			return nil, err
+		}
+		return &Result{Message: "Committed."}, nil
+	case *sql.Rollback:
+		if !db.tm.Active() {
+			return nil, errors.New("cannot roll back: no transaction is active")
+		}
+		if err := db.tm.Rollback(); err != nil {
+			return nil, err
+		}
+		if err := db.cat.Reload(); err != nil {
+			return nil, err
+		}
+		return &Result{Message: "Rolled back."}, nil
+	}
+
+	auto := !db.tm.Active()
+	if auto {
+		if err := db.tm.Begin(); err != nil {
+			return nil, err
+		}
+	}
+	db.p.BeginStmt()
 	res, err := db.dispatch(st)
 	if err != nil {
+		db.p.RollbackStmt()
+		if auto {
+			db.tm.Rollback()
+		}
+		if rerr := db.cat.Reload(); rerr != nil {
+			return nil, rerr
+		}
 		return nil, err
 	}
-	if err := db.p.Flush(); err != nil {
-		return nil, err
+	db.p.EndStmt()
+	if auto {
+		if err := db.tm.Commit(); err != nil {
+			return nil, err
+		}
 	}
 	return res, nil
 }
@@ -184,5 +242,10 @@ func (db *DB) Stats() string {
 	fmt.Fprintf(&sb, "cache hits:    %d, misses: %d\n", s.CacheHits, s.CacheMiss)
 	fmt.Fprintf(&sb, "disk I/O:      %d page reads, %d page writes\n", s.Reads, s.Writes)
 	fmt.Fprintf(&sb, "tables:        %d\n", len(db.cat.Names()))
+	if db.tm.Active() {
+		fmt.Fprintf(&sb, "transaction:   active (%d dirty pages)\n", s.Dirty)
+	} else {
+		fmt.Fprintf(&sb, "transaction:   none (autocommit)\n")
+	}
 	return sb.String()
 }

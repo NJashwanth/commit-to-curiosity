@@ -1,0 +1,95 @@
+> CREATE TABLE acct (id INTEGER PRIMARY KEY, owner TEXT, balance INTEGER);
+Table acct created.
+> INSERT INTO acct VALUES (1, 'ann', 100), (2, 'bob', 50);
+2 rows inserted.
+> BEGIN;
+Transaction started.
+> UPDATE acct SET balance = balance - 30 WHERE id = 1;
+1 row updated.
+> UPDATE acct SET balance = balance + 30 WHERE id = 2;
+1 row updated.
+> SELECT * FROM acct;
+id | owner | balance
+---+-------+--------
+1  | ann   | 70
+2  | bob   | 80
+(2 rows)
+> ROLLBACK;
+Rolled back.
+> SELECT * FROM acct;
+id | owner | balance
+---+-------+--------
+1  | ann   | 100
+2  | bob   | 50
+(2 rows)
+> BEGIN TRANSACTION;
+Transaction started.
+> UPDATE acct SET balance = balance - 30 WHERE id = 1;
+1 row updated.
+> UPDATE acct SET balance = balance + 30 WHERE id = 2;
+1 row updated.
+> COMMIT;
+Committed.
+> SELECT * FROM acct;
+id | owner | balance
+---+-------+--------
+1  | ann   | 70
+2  | bob   | 80
+(2 rows)
+> BEGIN;
+Transaction started.
+> CREATE TABLE temp (id INTEGER PRIMARY KEY);
+Table temp created.
+> INSERT INTO temp VALUES (1);
+1 row inserted.
+> DROP TABLE acct;
+Table acct dropped.
+> SELECT * FROM temp;
+id
+--
+1
+(1 row)
+> ROLLBACK;
+Rolled back.
+> SELECT * FROM temp;
+Error: line 1, column 1: no such table: temp
+> SELECT COUNT(*) FROM acct;
+COUNT(*)
+--------
+2
+(1 row)
+> BEGIN;
+Transaction started.
+> INSERT INTO acct VALUES (3, 'cy', 5);
+1 row inserted.
+> INSERT INTO acct VALUES (4, 'di', 6), (5, 'ed', 7), (3, 'dup', 0);
+Error: duplicate primary key 3 in table acct
+> INSERT INTO acct VALUES (6, 'flo', 8);
+1 row inserted.
+> COMMIT;
+Committed.
+> SELECT id, owner FROM acct;
+id | owner
+---+------
+1  | ann
+2  | bob
+3  | cy
+6  | flo
+(4 rows)
+> INSERT INTO acct VALUES (7, 'g', 1), (8, 'h', 2), (7, 'dup', 3);
+Error: duplicate primary key 7 in table acct
+> SELECT COUNT(*) FROM acct;
+COUNT(*)
+--------
+4
+(1 row)
+> BEGIN;
+Transaction started.
+> BEGIN;
+Error: cannot start a transaction within a transaction
+> COMMIT;
+Committed.
+> COMMIT;
+Error: cannot commit: no transaction is active
+> ROLLBACK;
+Error: cannot roll back: no transaction is active

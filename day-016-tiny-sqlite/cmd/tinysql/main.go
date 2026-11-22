@@ -33,6 +33,10 @@ func run(args []string, in io.Reader, out, errw io.Writer) int {
 	}
 	defer db.Close()
 
+	if r, ok := db.(interface{ Recovered() bool }); ok && r.Recovered() {
+		fmt.Fprintln(out, "Recovered from an interrupted commit: rolled back to the last committed state.")
+	}
+
 	interactive := isTerminal(in)
 	if interactive {
 		fmt.Fprintf(out, "tinysql, type .help for help, statements end with ';'\n")

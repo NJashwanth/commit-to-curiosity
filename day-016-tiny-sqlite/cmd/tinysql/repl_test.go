@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/NJashwanth/commit-to-curiosity/day-016-tiny-sqlite/internal/exec"
+	"github.com/NJashwanth/commit-to-curiosity/day-016-tiny-sqlite/internal/txn"
 )
 
 type fakeDB struct {
@@ -251,5 +254,27 @@ func TestOpenFailure(t *testing.T) {
 	}
 	if !strings.Contains(errw.String(), "tinysql:") {
 		t.Errorf("stderr = %q", errw.String())
+	}
+}
+
+func TestRecoveryNoticeAfterCrash(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "crash.db")
+	db, err := exec.Open(path, exec.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Run("CREATE TABLE t (id INTEGER PRIMARY KEY); INSERT INTO t VALUES (1);", io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	db.TxnManager().Crash = txn.CrashAfterDBWrite
+	if err := db.Run("INSERT INTO t VALUES (2);", io.Discard); !errors.Is(err, txn.ErrSimulatedCrash) {
+		t.Fatalf("err = %v", err)
+	}
+	db.TxnManager().Abandon()
+
+	var out, errw bytes.Buffer
+	run([]string{path}, strings.NewReader("SELECT COUNT(*) FROM t;\n"), &out, &errw)
+	if !strings.Contains(out.String(), "Recovered from an interrupted commit") || !strings.Contains(out.String(), "1\n(1 row)") {
+		t.Errorf("out = %q", out.String())
 	}
 }

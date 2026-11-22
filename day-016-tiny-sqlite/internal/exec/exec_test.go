@@ -234,13 +234,6 @@ func TestEarlyLimitStopsScan(t *testing.T) {
 	}
 }
 
-func TestExecRejectsUnsupportedStatement(t *testing.T) {
-	db, _ := openTemp(t, Options{})
-	if msg := runErr(t, db, "BEGIN;"); !strings.Contains(msg, "not supported") {
-		t.Errorf("msg = %s", msg)
-	}
-}
-
 func TestRowTooLarge(t *testing.T) {
 	db, _ := openTemp(t, Options{})
 	mustRun(t, db, "CREATE TABLE t (id INTEGER PRIMARY KEY, s TEXT);")

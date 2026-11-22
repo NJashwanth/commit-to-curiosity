@@ -53,6 +53,25 @@ type Stats struct {
 	CachedPages, Dirty   int
 }
 
+// Journal receives the original content of each page the first time a
+// transaction modifies it. Package txn implements it with a journal file.
+type Journal interface {
+	Record(id uint32, before []byte) error
+}
+
+// ErrInTxn is returned by Begin when a transaction is already open.
+var ErrInTxn = errors.New("a transaction is already active")
+
+// stmtState is an in-memory savepoint taken around each statement, so a
+// failing statement inside a longer transaction can be undone on its own.
+type stmtState struct {
+	pages    uint32
+	freeHead uint32
+	hdrDirty bool
+	saved    map[uint32][]byte // page content at first touch in the statement
+	wasDirty map[uint32]bool
+}
+
 type frame struct {
 	id   uint32
 	data []byte
@@ -72,6 +91,13 @@ type Pager struct {
 	freeHead uint32
 	hdrDirty bool
 	stats    Stats
+
+	// transaction state (see Begin)
+	inTxn    bool
+	journal  Journal
+	txnPages uint32 // page count when the transaction began
+	txnFree  uint32 // free list head when the transaction began
+	stmt     *stmtState
 }
 
 // Open opens or creates the database file at path.
@@ -219,7 +245,27 @@ func (p *Pager) Write(id uint32) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.dirty[id] = struct{}{}
+	if _, d := p.dirty[id]; !d {
+		// A clean page still matches the file, so this is its before-image.
+		if p.journal != nil && id < p.txnPages {
+			if err := p.journal.Record(id, fr.data); err != nil {
+				return nil, err
+			}
+		}
+		p.dirty[id] = struct{}{}
+		if p.stmt != nil && id < p.stmt.pages {
+			p.stmt.wasDirty[id] = false
+		}
+	} else if p.stmt != nil && id < p.stmt.pages {
+		if _, seen := p.stmt.wasDirty[id]; !seen {
+			p.stmt.wasDirty[id] = true
+		}
+	}
+	if p.stmt != nil && id < p.stmt.pages {
+		if _, ok := p.stmt.saved[id]; !ok {
+			p.stmt.saved[id] = append([]byte(nil), fr.data...)
+		}
+	}
 	return fr.data, nil
 }
 
