@@ -1,0 +1,105 @@
+> CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, score REAL);
+Table users created.
+> INSERT INTO users VALUES (1, 'Jash', 27, 98.5), (2, 'Ada', 36, 91.0), (3, 'Linus', 54, 77.25), (4, 'Grace', 45, NULL), (5, 'Edsger', 72, 60.0);
+5 rows inserted.
+> UPDATE users SET age = age + 1 WHERE id = 1;
+1 row updated.
+> UPDATE users SET score = 50 WHERE score IS NULL;
+1 row updated.
+> UPDATE users SET name = 'Ada L.', age = NULL WHERE name = 'Ada';
+1 row updated.
+> SELECT * FROM users;
+id | name   | age  | score
+---+--------+------+------
+1  | Jash   | 28   | 98.5
+2  | Ada L. | NULL | 91.0
+3  | Linus  | 54   | 77.25
+4  | Grace  | 45   | 50.0
+5  | Edsger | 72   | 60.0
+(5 rows)
+> UPDATE users SET age = age + 10;
+5 rows updated.
+> SELECT id, age FROM users ORDER BY id;
+id | age
+---+-----
+1  | 38
+2  | NULL
+3  | 64
+4  | 55
+5  | 82
+(5 rows)
+> UPDATE users SET id = 20 WHERE id = 5;
+1 row updated.
+> UPDATE users SET id = id + 100 WHERE id > 15;
+1 row updated.
+> SELECT id, name FROM users;
+id  | name
+----+-------
+1   | Jash
+2   | Ada L.
+3   | Linus
+4   | Grace
+120 | Edsger
+(5 rows)
+> UPDATE users SET id = 1 WHERE id = 3;
+Error: duplicate primary key 1 in table users
+> UPDATE users SET id = NULL WHERE id = 3;
+Error: primary key id cannot be NULL
+> UPDATE users SET name = 5 WHERE id = 3;
+Error: type mismatch: column "name" is TEXT, got INTEGER 5
+> UPDATE users SET nope = 1;
+Error: line 1, column 18: table users has no column nope
+> UPDATE users SET age = 1, age = 2;
+Error: line 1, column 27: column age is assigned twice
+> UPDATE nope SET a = 1;
+Error: line 1, column 1: no such table: nope
+> UPDATE users SET name = 'x' WHERE id = 9999;
+0 rows updated.
+> SELECT name FROM users WHERE id = 3;
+name
+-----
+Linus
+(1 row)
+> UPDATE users SET name = 'swap', age = id WHERE id = 2;
+1 row updated.
+> SELECT id, name, age FROM users WHERE id = 2;
+id | name | age
+---+------+----
+2  | swap | 2
+(1 row)
+> DELETE FROM users WHERE age > 60;
+2 rows deleted.
+> SELECT id FROM users;
+id
+--
+1
+2
+4
+(3 rows)
+> DELETE FROM users WHERE id = 9999;
+0 rows deleted.
+> DELETE FROM users WHERE name LIKE 'g%' OR id = 1;
+2 rows deleted.
+> SELECT id, name FROM users;
+id | name
+---+-----
+2  | swap
+(1 row)
+> DELETE FROM nope;
+Error: line 1, column 1: no such table: nope
+> DELETE FROM users WHERE nope = 1;
+Error: line 1, column 25: no such column: nope
+> DELETE FROM users;
+1 row deleted.
+> SELECT COUNT(*) FROM users;
+COUNT(*)
+--------
+0
+(1 row)
+> INSERT INTO users VALUES (1, 'again', 1, 1.0);
+1 row inserted.
+> SELECT * FROM users;
+id | name  | age | score
+---+-------+-----+------
+1  | again | 1   | 1.0
+(1 row)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/NJashwanth/commit-to-curiosity/day-016-tiny-sqlite/internal/btree"
 	"github.com/NJashwanth/commit-to-curiosity/day-016-tiny-sqlite/internal/pager"
+	"github.com/NJashwanth/commit-to-curiosity/day-016-tiny-sqlite/internal/sql"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -256,4 +257,13 @@ func TestOpenRejectsForeignFile(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 	_ = pager.PageSize
+}
+
+func mustParse(t *testing.T, src string) sql.Stmt {
+	t.Helper()
+	st, err := sql.ParseOne(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
 }

@@ -92,6 +92,12 @@ func (db *DB) dispatch(st sql.Stmt) (*Result, error) {
 		return db.insert(s)
 	case *sql.Select:
 		return db.selectRows(s)
+	case *sql.Update:
+		return db.update(s)
+	case *sql.Delete:
+		return db.delete(s)
+	case *sql.DropTable:
+		return db.dropTable(s)
 	}
 	return nil, fmt.Errorf("statement %T is not supported yet", st)
 }
