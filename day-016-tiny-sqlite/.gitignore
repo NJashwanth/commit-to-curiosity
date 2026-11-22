@@ -1,0 +1,4 @@
+*.db
+*-journal
+coverage.out
+/tinysql
