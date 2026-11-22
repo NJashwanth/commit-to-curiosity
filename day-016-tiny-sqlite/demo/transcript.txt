@@ -1,0 +1,91 @@
+$ seed -rows 10000 | tinysql demo.db
+loaded 10,000 rows in one transaction: 127 ms (including process start)
+
+$ tinysql demo.db
+tinysql> .timer on
+tinysql> .tables
+events
+tinysql> .schema events
+CREATE TABLE events (id INTEGER PRIMARY KEY, user TEXT, kind TEXT, amount REAL, ts INTEGER);
+tinysql> SELECT COUNT(*), SUM(amount), AVG(amount), MIN(ts), MAX(ts) FROM events;
+COUNT(*) | SUM(amount)        | AVG(amount)        | MIN(ts)    | MAX(ts)
+---------+--------------------+--------------------+------------+-----------
+10000    | 2359229.8300000005 | 247.81825945378156 | 1700008742 | 1731532639
+(1 row)
+Run time: 3.615 ms
+tinysql> SELECT id, user, kind, amount FROM events WHERE id >= 4995 AND id < 5000;
+id   | user    | kind     | amount
+-----+---------+----------+-------
+4995 | user018 | click    | 441.81
+4996 | user097 | view     | 174.25
+4997 | user092 | click    | 339.73
+4998 | user087 | click    | 484.61
+4999 | user101 | purchase | 481.88
+(5 rows)
+Run time: 2.912 ms
+tinysql> SELECT id, user, amount FROM events WHERE kind = 'purchase' AND amount > 499 ORDER BY amount DESC LIMIT 5;
+id   | user    | amount
+-----+---------+-------
+3478 | user104 | 499.99
+1343 | user132 | 499.53
+9988 | user068 | 499.43
+3915 | user018 | 499.22
+9882 | user052 | 499.12
+(5 rows)
+Run time: 2.770 ms
+tinysql> SELECT COUNT(*), AVG(amount) FROM events WHERE user LIKE 'user00%' AND amount IS NOT NULL;
+COUNT(*) | AVG(amount)
+---------+-------------------
+473      | 255.46289640591962
+(1 row)
+Run time: 3.821 ms
+tinysql> SELECT * FROM events WHERE id = 7777;
+id   | user    | kind   | amount | ts
+-----+---------+--------+--------+-----------
+7777 | user050 | refund | 377.17 | 1701246846
+(1 row)
+Run time: 0.055 ms
+tinysql> .timer off
+tinysql> .btree events
+table events: root page #2, height 2, 113 leaves, 1 internal nodes, 10000 rows
+[internal #2] separators [91 180 270 ... 9896 9983] (112 keys)
+  [leaf #4] keys 1..90 (90 rows) -> #3
+  [leaf #3] keys 91..179 (89 rows) -> #5
+  [leaf #5] keys 180..269 (90 rows) -> #6
+  [leaf #6] keys 270..358 (89 rows) -> #7
+  [leaf #7] keys 359..447 (89 rows) -> #8
+  [leaf #8] keys 448..536 (89 rows) -> #9
+  ... 105 more children ...
+  [leaf #114] keys 9896..9982 (87 rows) -> #115
+  [leaf #115] keys 9983..10000 (18 rows) -> end
+tinysql> SELECT COUNT(*), SUM(amount) FROM events;
+COUNT(*) | SUM(amount)
+---------+-------------------
+10000    | 2359229.8300000005
+(1 row)
+tinysql> BEGIN;
+Transaction started.
+tinysql> DELETE FROM events WHERE id > 5000;
+5000 rows deleted.
+tinysql> SELECT COUNT(*), SUM(amount) FROM events;
+COUNT(*) | SUM(amount)
+---------+-------------------
+5000     | 1174196.8000000003
+(1 row)
+tinysql> .stats
+file:          demo.db
+page size:     4096 bytes
+pages:         116 (0 free)
+cache:         115 pages cached, 58 dirty
+cache hits:    20763, misses: 115
+disk I/O:      115 page reads, 0 page writes
+tables:        1
+transaction:   active (58 dirty pages)
+tinysql> ROLLBACK;
+Rolled back.
+tinysql> SELECT COUNT(*), SUM(amount) FROM events;
+COUNT(*) | SUM(amount)
+---------+-------------------
+10000    | 2359229.8300000005
+(1 row)
+tinysql> .exit
