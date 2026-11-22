@@ -106,3 +106,61 @@ func (l *leaf) removeAt(i int) {
 	l.keys = append(l.keys[:i], l.keys[i+1:]...)
 	l.vals = append(l.vals[:i], l.vals[i+1:]...)
 }
+
+// Internal node cells are  key i64 | child u32. A node with n keys has n+1
+// children: child i holds keys < keys[i] (and >= keys[i-1]); the last child,
+// stored in the header, holds keys >= keys[n-1].
+const (
+	internalCell     = 12
+	internalCapacity = (pager.PageSize - headerSize) / internalCell // 340 keys
+)
+
+type internal struct {
+	keys     []int64
+	children []uint32 // len(keys)+1
+}
+
+func readInternal(buf []byte) (*internal, error) {
+	if buf[0] != typeInternal {
+		return nil, fmt.Errorf("%w: expected internal node, page has type %d", ErrCorrupt, buf[0])
+	}
+	n := int(binary.LittleEndian.Uint16(buf[1:]))
+	if headerSize+n*internalCell > len(buf) {
+		return nil, fmt.Errorf("%w: internal node claims %d keys", ErrCorrupt, n)
+	}
+	in := &internal{keys: make([]int64, n), children: make([]uint32, n+1)}
+	for i := 0; i < n; i++ {
+		pos := headerSize + i*internalCell
+		in.keys[i] = int64(binary.LittleEndian.Uint64(buf[pos:]))
+		in.children[i] = binary.LittleEndian.Uint32(buf[pos+8:])
+	}
+	in.children[n] = binary.LittleEndian.Uint32(buf[4:])
+	return in, nil
+}
+
+func (in *internal) write(buf []byte) {
+	clear(buf)
+	buf[0] = typeInternal
+	binary.LittleEndian.PutUint16(buf[1:], uint16(len(in.keys)))
+	binary.LittleEndian.PutUint32(buf[4:], in.children[len(in.keys)])
+	for i, k := range in.keys {
+		pos := headerSize + i*internalCell
+		binary.LittleEndian.PutUint64(buf[pos:], uint64(k))
+		binary.LittleEndian.PutUint32(buf[pos+8:], in.children[i])
+	}
+}
+
+// childIndex returns which child subtree may contain key.
+func (in *internal) childIndex(key int64) int {
+	return sort.Search(len(in.keys), func(i int) bool { return in.keys[i] > key })
+}
+
+// insertChild records that child ci split: sep separates it from the new right sibling.
+func (in *internal) insertChild(ci int, sep int64, right uint32) {
+	in.keys = append(in.keys, 0)
+	copy(in.keys[ci+1:], in.keys[ci:])
+	in.keys[ci] = sep
+	in.children = append(in.children, 0)
+	copy(in.children[ci+2:], in.children[ci+1:])
+	in.children[ci+1] = right
+}

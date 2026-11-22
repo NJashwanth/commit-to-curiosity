@@ -110,7 +110,7 @@ func TestInsertGetSortedOrder(t *testing.T) {
 	if n, _ := tr.Count(); n != len(keys) {
 		t.Errorf("Count = %d", n)
 	}
-	if err := tr.Check(); err != nil {
+	if _, err := tr.Check(); err != nil {
 		t.Error(err)
 	}
 }
@@ -191,30 +191,6 @@ func TestPayloadLimit(t *testing.T) {
 	}
 	if err := tr.Update(1, make([]byte, MaxPayload+1)); !errors.Is(err, ErrTooLarge) {
 		t.Errorf("oversize update: %v", err)
-	}
-}
-
-func TestSingleLeafFillsUp(t *testing.T) {
-	tr, _ := newTree(t, Config{MaxLeafCells: 4})
-	for k := int64(0); k < 4; k++ {
-		if err := tr.Insert(k, val(k)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := tr.Insert(4, val(4)); !errors.Is(err, ErrNodeFull) {
-		t.Errorf("5th insert: %v", err)
-	}
-	if n, _ := tr.Count(); n != 4 {
-		t.Errorf("failed insert changed the leaf: %d", n)
-	}
-	// Byte-limited fill
-	tr2, _ := newTree(t, Config{})
-	var err error
-	for k := int64(0); err == nil && k < 100; k++ {
-		err = tr2.Insert(k, make([]byte, MaxPayload))
-	}
-	if !errors.Is(err, ErrNodeFull) {
-		t.Errorf("byte-limited fill: %v", err)
 	}
 }
 
