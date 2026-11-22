@@ -1,0 +1,12 @@
+CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, score REAL);
+INSERT INTO users VALUES (1, 'Jash', 27, 98.5);
+INSERT INTO users VALUES (2, 'Ada', 36, 91.0), (3, 'Linus', 54, 77.25), (4, 'Grace', 45, NULL);
+INSERT INTO users (id, name) VALUES (5, 'Edsger');
+SELECT * FROM users;
+SELECT name, age FROM users WHERE age > 25 ORDER BY name LIMIT 10;
+SELECT name FROM users WHERE age >= 36 AND age < 50 ORDER BY age DESC;
+SELECT name, age + 1 AS next_year FROM users WHERE age IS NOT NULL ORDER BY next_year DESC LIMIT 2 OFFSET 1;
+SELECT name FROM users WHERE NOT (age < 40) OR name = 'Jash' ORDER BY id;
+SELECT id, name FROM users WHERE score IS NULL;
+SELECT name FROM users ORDER BY 1 DESC;
+SELECT 1 + 2 * 3, 'it''s', 10 / 4, 10 / 4.0, 7 % 3;

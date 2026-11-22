@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -183,7 +184,7 @@ func TestRunUsageAndOpen(t *testing.T) {
 	}
 	errw.Reset()
 	out.Reset()
-	code := run([]string{"-echo", "x.db"}, strings.NewReader(".tables\n.exit\n"), &out, &errw)
+	code := run([]string{"-echo", filepath.Join(t.TempDir(), "x.db")}, strings.NewReader(".tables\n.exit\n"), &out, &errw)
 	if code != 0 {
 		t.Fatalf("code %d, stderr %q", code, errw.String())
 	}
@@ -201,21 +202,54 @@ func TestIsTerminal(t *testing.T) {
 	}
 }
 
-func TestStubDB(t *testing.T) {
-	db, err := openDatabase("x")
-	if err != nil {
-		t.Fatal(err)
+func TestEndToEndSession(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "e2e.db")
+	script := `CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, score REAL);
+INSERT INTO users VALUES (1, 'Jash', 27, 98.5);
+INSERT INTO users VALUES (2, 'Ada', 36, 91.0);
+SELECT name, age FROM users
+  WHERE age > 25 ORDER BY name LIMIT 10;
+SELECT COUNT(*), AVG(score) FROM users;
+SELECT nope FROM users;
+.tables
+.schema users
+.btree users
+.stats
+.exit
+`
+	var out, errw bytes.Buffer
+	if code := run([]string{path}, strings.NewReader(script), &out, &errw); code != 0 {
+		t.Fatalf("exit %d: %s", code, errw.String())
 	}
-	if db.Run("SELECT 1;", io.Discard) == nil {
-		t.Error("stub should error")
+	for _, want := range []string{
+		"Table users created.",
+		"Ada  | 36",
+		"Jash | 27",
+		"COUNT(*) | AVG(score)",
+		"2        | 94.75",
+		"Error: line 1, column 8: no such column: nope",
+		"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, score REAL);",
+		"[leaf #2] keys 1..2 (2 rows) -> end",
+		"page size:     4096",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output lacks %q:\n%s", want, out.String())
+		}
 	}
-	if db.BTree("t", io.Discard) == nil {
-		t.Error("stub btree should error")
+	// A second process sees the data.
+	out.Reset()
+	run([]string{path}, strings.NewReader("SELECT COUNT(*) FROM users;\n"), &out, &errw)
+	if !strings.Contains(out.String(), "2\n(1 row)") {
+		t.Errorf("after reopen: %s", out.String())
 	}
-	if _, err := db.Schema(""); err != nil {
-		t.Error(err)
+}
+
+func TestOpenFailure(t *testing.T) {
+	var out, errw bytes.Buffer
+	if code := run([]string{t.TempDir()}, strings.NewReader(""), &out, &errw); code != 1 {
+		t.Errorf("code %d", code)
 	}
-	if db.Stats() == "" || db.Tables() != nil || db.Close() != nil {
-		t.Error("stub misbehaves")
+	if !strings.Contains(errw.String(), "tinysql:") {
+		t.Errorf("stderr = %q", errw.String())
 	}
 }

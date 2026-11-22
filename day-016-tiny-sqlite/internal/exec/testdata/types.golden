@@ -1,0 +1,52 @@
+> CREATE TABLE m (id INTEGER PRIMARY KEY, label TEXT, price REAL, qty INTEGER);
+Table m created.
+> INSERT INTO m VALUES (1, 'héllo 世界 🙂', 9.99, 3);
+1 row inserted.
+> INSERT INTO m VALUES (2, 'multi
+  line', 100, 0);
+1 row inserted.
+> INSERT INTO m VALUES (3, '', -0.5, -7);
+1 row inserted.
+> INSERT INTO m VALUES (4, 'x', 4.0, 5.0);
+1 row inserted.
+> SELECT * FROM m;
+id | label       | price | qty
+---+-------------+-------+----
+1  | héllo 世界 🙂  | 9.99  | 3
+2  | multi\nline | 100.0 | 0
+3  |             | -0.5  | -7
+4  | x           | 4.0   | 5
+(4 rows)
+> SELECT price * qty FROM m ORDER BY id;
+price * qty
+-----------
+29.97
+0.0
+3.5
+20.0
+(4 rows)
+> SELECT id FROM m WHERE price > 9.5;
+id
+--
+1
+2
+(2 rows)
+> INSERT INTO m VALUES ('five', 'x', 1.0, 1);
+Error: type mismatch: column "id" is INTEGER, got TEXT 'five'
+> INSERT INTO m VALUES (5, 99, 1.0, 1);
+Error: type mismatch: column "label" is TEXT, got INTEGER 99
+> INSERT INTO m VALUES (6, 'x', 'cheap', 1);
+Error: type mismatch: column "price" is REAL, got TEXT 'cheap'
+> INSERT INTO m VALUES (7, 'x', 1.0, 2.5);
+Error: type mismatch: column "qty" is INTEGER, got REAL 2.5
+> INSERT INTO m VALUES (8, 'x', 1.0);
+Error: line 1, column 1: row 1 has 3 values but 4 values expected
+> INSERT INTO m (id, nope) VALUES (9, 1);
+Error: line 1, column 1: table m has no column nope
+> INSERT INTO m (id, id) VALUES (9, 1);
+Error: line 1, column 1: column id listed twice
+> SELECT COUNT(*) FROM m;
+COUNT(*)
+--------
+4
+(1 row)

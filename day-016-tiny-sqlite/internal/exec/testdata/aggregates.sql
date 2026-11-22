@@ -1,0 +1,11 @@
+CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, score REAL);
+INSERT INTO users VALUES (1, 'Jash', 27, 98.5), (2, 'Ada', 36, 91.0), (3, 'Linus', 54, 77.25), (4, 'Grace', 45, NULL), (5, 'Edsger', NULL, 60.0);
+SELECT COUNT(*), COUNT(age), COUNT(score) FROM users;
+SELECT SUM(age), AVG(age), MIN(age), MAX(age) FROM users;
+SELECT SUM(score), AVG(score), MIN(score), MAX(score) FROM users;
+SELECT MIN(name), MAX(name) FROM users;
+SELECT COUNT(*), AVG(score) FROM users WHERE age > 30;
+SELECT COUNT(*), SUM(age), MAX(name) FROM users WHERE age > 1000;
+SELECT SUM(age) / COUNT(age) AS mean_age, MAX(score) - MIN(score) FROM users;
+SELECT COUNT(*) FROM users LIMIT 0;
+SELECT COUNT(*) AS n FROM users WHERE id BETWEEN_NOT_SUPPORTED;

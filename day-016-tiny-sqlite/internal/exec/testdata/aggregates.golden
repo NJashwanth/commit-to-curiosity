@@ -1,0 +1,45 @@
+> CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, score REAL);
+Table users created.
+> INSERT INTO users VALUES (1, 'Jash', 27, 98.5), (2, 'Ada', 36, 91.0), (3, 'Linus', 54, 77.25), (4, 'Grace', 45, NULL), (5, 'Edsger', NULL, 60.0);
+5 rows inserted.
+> SELECT COUNT(*), COUNT(age), COUNT(score) FROM users;
+COUNT(*) | COUNT(age) | COUNT(score)
+---------+------------+-------------
+5        | 4          | 4
+(1 row)
+> SELECT SUM(age), AVG(age), MIN(age), MAX(age) FROM users;
+SUM(age) | AVG(age) | MIN(age) | MAX(age)
+---------+----------+----------+---------
+162      | 40.5     | 27       | 54
+(1 row)
+> SELECT SUM(score), AVG(score), MIN(score), MAX(score) FROM users;
+SUM(score) | AVG(score) | MIN(score) | MAX(score)
+-----------+------------+------------+-----------
+326.75     | 81.6875    | 60.0       | 98.5
+(1 row)
+> SELECT MIN(name), MAX(name) FROM users;
+MIN(name) | MAX(name)
+----------+----------
+Ada       | Linus
+(1 row)
+> SELECT COUNT(*), AVG(score) FROM users WHERE age > 30;
+COUNT(*) | AVG(score)
+---------+-----------
+3        | 84.125
+(1 row)
+> SELECT COUNT(*), SUM(age), MAX(name) FROM users WHERE age > 1000;
+COUNT(*) | SUM(age) | MAX(name)
+---------+----------+----------
+0        | NULL     | NULL
+(1 row)
+> SELECT SUM(age) / COUNT(age) AS mean_age, MAX(score) - MIN(score) FROM users;
+mean_age | MAX(score) - MIN(score)
+---------+------------------------
+40       | 38.5
+(1 row)
+> SELECT COUNT(*) FROM users LIMIT 0;
+COUNT(*)
+--------
+(0 rows)
+> SELECT COUNT(*) AS n FROM users WHERE id BETWEEN_NOT_SUPPORTED;
+Error: syntax error at line 1, column 42: expected ';' or end of input, found identifier BETWEEN_NOT_SUPPORTED

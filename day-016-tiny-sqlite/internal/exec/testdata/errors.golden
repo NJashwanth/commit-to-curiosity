@@ -1,0 +1,44 @@
+> CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);
+Table t created.
+> INSERT INTO t VALUES (1, 'a');
+1 row inserted.
+> SELECT nope FROM t;
+Error: line 1, column 8: no such column: nope
+> SELECT name FROM missing;
+Error: line 1, column 1: no such table: missing
+> SELECT * FROM t WHERE nope = 1;
+Error: line 1, column 23: no such column: nope
+> SELECT name,
+    bogus
+  FROM t;
+Error: line 2, column 3: no such column: bogus
+> SELECT COUNT(*), name FROM t;
+Error: line 1, column 18: column "name" must be used inside an aggregate function
+> SELECT SUM(name) FROM t;
+Error: line 1, column 8: SUM needs numbers, got TEXT
+> SELECT * FROM t WHERE COUNT(*) > 1;
+Error: line 1, column 23: aggregate function COUNT is not allowed here
+> SELECT COUNT(COUNT(*)) FROM t;
+Error: line 1, column 8: aggregate functions cannot be nested
+> SELECT * FROM t WHERE name;
+Error: a TEXT value cannot be used as a condition
+> SELECT -name FROM t;
+Error: cannot negate a TEXT value
+> SELECT name + 1 FROM t;
+Error: operator + needs numbers, got TEXT and INTEGER
+> SELECT * FROM t ORDER BY 3;
+Error: ORDER BY position 3 is out of range (1..2)
+> SELECT *;
+Error: line 1, column 1: SELECT * requires a FROM clause
+> SELECT * FROM t WHERE;
+Error: syntax error at line 1, column 22: expected an expression, found ';'
+> INSERT INTO t VALUES (2);
+Error: line 1, column 1: row 1 has 1 value but 2 values expected
+> INSERT INTO t VALUES (3, 'x', 'y');
+Error: line 1, column 1: row 1 has 3 values but 2 values expected
+> INSERT INTO nope VALUES (1);
+Error: line 1, column 1: no such table: nope
+> SELECT 1 +;
+Error: syntax error at line 1, column 11: expected an expression, found ';'
+> SELECT 'unterminated;
+Error: syntax error at line 1, column 8: unterminated string literal

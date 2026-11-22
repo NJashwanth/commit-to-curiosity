@@ -1,0 +1,16 @@
+CREATE TABLE t (id INTEGER PRIMARY KEY, s TEXT, n INTEGER);
+INSERT INTO t VALUES (1, 'apple', 1), (2, 'Apple pie', NULL), (3, 'banana', 3), (4, NULL, 4), (5, 'apricot', NULL), (6, '100%', 6), (7, 'a_c', 7);
+SELECT id FROM t WHERE s LIKE 'a%';
+SELECT id FROM t WHERE s LIKE '%PLE%';
+SELECT id FROM t WHERE s LIKE 'a_c';
+SELECT id FROM t WHERE s LIKE '_pple%';
+SELECT id FROM t WHERE s NOT LIKE 'a%';
+SELECT id FROM t WHERE n = NULL;
+SELECT id FROM t WHERE n IS NULL;
+SELECT id FROM t WHERE n != 1;
+SELECT id FROM t WHERE n > 2 OR s = 'apple';
+SELECT id FROM t WHERE NOT n > 2;
+SELECT id FROM t WHERE n IS NULL AND s IS NOT NULL;
+SELECT id, n FROM t ORDER BY n, id;
+SELECT id, n FROM t ORDER BY n DESC, id DESC;
+SELECT NULL, NULL IS NULL, 1 = NULL, NULL AND 0, NULL OR 1, NOT NULL;

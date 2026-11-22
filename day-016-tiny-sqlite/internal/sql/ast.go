@@ -2,6 +2,7 @@ package sql
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -163,7 +164,11 @@ func (l *Literal) String() string {
 	case LitInt:
 		return fmt.Sprint(l.Int)
 	case LitReal:
-		return fmt.Sprint(l.Real)
+		r := strconv.FormatFloat(l.Real, 'g', -1, 64)
+		if !strings.ContainsAny(r, ".eInN") {
+			r += ".0"
+		}
+		return r
 	case LitText:
 		return "'" + strings.ReplaceAll(l.Text, "'", "''") + "'"
 	}

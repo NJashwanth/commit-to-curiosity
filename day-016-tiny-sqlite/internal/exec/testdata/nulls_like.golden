@@ -1,0 +1,100 @@
+> CREATE TABLE t (id INTEGER PRIMARY KEY, s TEXT, n INTEGER);
+Table t created.
+> INSERT INTO t VALUES (1, 'apple', 1), (2, 'Apple pie', NULL), (3, 'banana', 3), (4, NULL, 4), (5, 'apricot', NULL), (6, '100%', 6), (7, 'a_c', 7);
+7 rows inserted.
+> SELECT id FROM t WHERE s LIKE 'a%';
+id
+--
+1
+2
+5
+7
+(4 rows)
+> SELECT id FROM t WHERE s LIKE '%PLE%';
+id
+--
+1
+2
+(2 rows)
+> SELECT id FROM t WHERE s LIKE 'a_c';
+id
+--
+7
+(1 row)
+> SELECT id FROM t WHERE s LIKE '_pple%';
+id
+--
+1
+2
+(2 rows)
+> SELECT id FROM t WHERE s NOT LIKE 'a%';
+id
+--
+3
+6
+(2 rows)
+> SELECT id FROM t WHERE n = NULL;
+id
+--
+(0 rows)
+> SELECT id FROM t WHERE n IS NULL;
+id
+--
+2
+5
+(2 rows)
+> SELECT id FROM t WHERE n != 1;
+id
+--
+3
+4
+6
+7
+(4 rows)
+> SELECT id FROM t WHERE n > 2 OR s = 'apple';
+id
+--
+1
+3
+4
+6
+7
+(5 rows)
+> SELECT id FROM t WHERE NOT n > 2;
+id
+--
+1
+(1 row)
+> SELECT id FROM t WHERE n IS NULL AND s IS NOT NULL;
+id
+--
+2
+5
+(2 rows)
+> SELECT id, n FROM t ORDER BY n, id;
+id | n
+---+-----
+2  | NULL
+5  | NULL
+1  | 1
+3  | 3
+4  | 4
+6  | 6
+7  | 7
+(7 rows)
+> SELECT id, n FROM t ORDER BY n DESC, id DESC;
+id | n
+---+-----
+7  | 7
+6  | 6
+4  | 4
+3  | 3
+1  | 1
+5  | NULL
+2  | NULL
+(7 rows)
+> SELECT NULL, NULL IS NULL, 1 = NULL, NULL AND 0, NULL OR 1, NOT NULL;
+NULL | NULL IS NULL | 1 = NULL | NULL AND 0 | NULL OR 1 | NOT NULL
+-----+--------------+----------+------------+-----------+---------
+NULL | 1            | NULL     | 0          | 1         | NULL
+(1 row)

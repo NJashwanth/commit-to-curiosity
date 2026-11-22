@@ -1,0 +1,77 @@
+> CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT);
+Table t created.
+> INSERT INTO t (v) VALUES ('auto1');
+1 row inserted.
+> INSERT INTO t (v) VALUES ('auto2'), ('auto3');
+2 rows inserted.
+> INSERT INTO t VALUES (10, 'ten');
+1 row inserted.
+> INSERT INTO t VALUES (NULL, 'after ten');
+1 row inserted.
+> INSERT INTO t VALUES (3, 'duplicate');
+Error: duplicate primary key 3 in table t
+> INSERT INTO t VALUES (-5, 'negative');
+1 row inserted.
+> SELECT * FROM t;
+id | v
+---+----------
+-5 | negative
+1  | auto1
+2  | auto2
+3  | auto3
+10 | ten
+11 | after ten
+(6 rows)
+> SELECT v FROM t WHERE id = 10;
+v
+---
+ten
+(1 row)
+> SELECT v FROM t WHERE id > 2 AND id < 11;
+v
+-----
+auto3
+ten
+(2 rows)
+> SELECT v FROM t WHERE 3 <= id AND id <= 10 ORDER BY id DESC;
+v
+-----
+ten
+auto3
+(2 rows)
+> SELECT v FROM t WHERE id >= 11 OR id < 0;
+v
+---------
+negative
+after ten
+(2 rows)
+> SELECT v FROM t WHERE id = 3 AND id = 4;
+v
+-
+(0 rows)
+> SELECT v FROM t WHERE id > 9223372036854775807;
+v
+-
+(0 rows)
+> SELECT v FROM t ORDER BY id LIMIT 2;
+v
+--------
+negative
+auto1
+(2 rows)
+> SELECT v FROM t LIMIT 2 OFFSET 2;
+v
+-----
+auto2
+auto3
+(2 rows)
+> CREATE TABLE no_pk (a INTEGER);
+Error: table no_pk must declare exactly one INTEGER PRIMARY KEY column
+> CREATE TABLE text_pk (a TEXT PRIMARY KEY);
+Error: PRIMARY KEY column a must be INTEGER
+> CREATE TABLE two_pk (a INTEGER PRIMARY KEY, b INTEGER PRIMARY KEY);
+Error: table two_pk must declare exactly one INTEGER PRIMARY KEY column
+> CREATE TABLE t (x INTEGER PRIMARY KEY);
+Error: table t already exists
+> CREATE TABLE IF NOT EXISTS t (x INTEGER PRIMARY KEY);
+Table t already exists.
