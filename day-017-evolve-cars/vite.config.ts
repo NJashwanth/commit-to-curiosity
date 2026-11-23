@@ -20,6 +20,7 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",
+    testTimeout: 120_000, // a few tests simulate real physics for many generations
     coverage: {
       provider: "v8",
       include: CORE_FILES,

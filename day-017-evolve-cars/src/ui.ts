@@ -1,9 +1,10 @@
 import { renderChart } from "./chart";
 import { Evolution, defaultEvolution, type CrossoverKind, type GenerationStats } from "./ga";
 import { genomeColorCss, vertexPoints } from "./genome";
+import { GenomeImportError, HallOfFame, exportGenome, exportHof, importHof, type HofEntry } from "./hof";
 import { SPAWN_X } from "./physics";
 import { Simulation, type Entry } from "./sim";
-import { difficultyAt, type Terrain } from "./terrain";
+import { difficultyAt, generateTerrain, type Terrain } from "./terrain";
 
 // Browser glue: canvas rendering, camera, stats, controls and the chart.
 // All evolution logic lives in the core modules; this file only draws and wires.
@@ -14,6 +15,7 @@ const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) 
 
 export interface App {
   evo: Evolution;
+  hof: HallOfFame;
   sim: Simulation;
   speed: Speed;
   paused: boolean;
@@ -21,6 +23,7 @@ export interface App {
   onGeneration: Array<(stats: GenerationStats, evo: Evolution) => void>;
   /** When set, the stage shows this simulation instead of the live generation. */
   replay: Simulation | null;
+  replayEntry(entry: HofEntry): void;
   setSpeed(s: Speed): void;
   startGeneration(): void;
   reset(seed?: number): void;
@@ -46,14 +49,21 @@ export function createApp(): App {
   const camera = { x: SPAWN_X, y: 0 };
   let evo = new Evolution(defaultEvolution(seed));
   let sim = new Simulation(evo.terrain, evo.genomes, evo.cfg.sim);
+  const hof = new HallOfFame();
 
   const app: App = {
     evo,
+    hof,
     sim,
     speed: 1,
     paused: false,
     onGeneration: [],
     replay: null,
+    replayEntry(entry) {
+      app.replay = new Simulation(generateTerrain(entry.terrainSeed), [entry.genome], evo.cfg.sim);
+      camera.x = SPAWN_X;
+      $("h-msg").textContent = `Replaying generation ${entry.generation} (${entry.distance.toFixed(1)} m, terrain ${entry.terrainSeed}).`;
+    },
     setSpeed(s) {
       app.speed = s;
       for (const b of document.querySelectorAll<HTMLButtonElement>("#speed-row button")) {
@@ -70,6 +80,8 @@ export function createApp(): App {
       app.evo = evo = new Evolution(cfg);
       app.startGeneration();
       app.replay = null;
+      hof.clear();
+      renderHof();
       camera.x = SPAWN_X;
       drawChart();
       updateSeeds();
@@ -87,6 +99,8 @@ export function createApp(): App {
 
   function finishGeneration(): void {
     const stats = evo.record(sim.fitness());
+    hof.add(stats, evo.cfg.terrainSeed);
+    renderHof();
     for (const fn of app.onGeneration) fn(stats, evo);
     evo.advance();
     app.startGeneration();
@@ -238,6 +252,70 @@ export function createApp(): App {
     $("seeds").textContent = `evolution seed ${evo.cfg.seed}, terrain seed ${evo.cfg.terrainSeed}. Add ?seed=42 to the URL to repeat a run.`;
   }
 
+  // ---- hall of fame ----------------------------------------------------
+
+  function download(name: string, text: string): void {
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function renderHof(): void {
+    const best = hof.best();
+    $("h-count").textContent = `(${hof.entries.length})`;
+    const list = $("h-list");
+    list.textContent = "";
+    hof.entries.forEach((entry, i) => {
+      const row = document.createElement("div");
+      row.className = "hof-row" + (entry === best ? " top" : "");
+      const swatch = document.createElement("i");
+      swatch.style.background = genomeColorCss(entry.genome);
+      const gen = document.createElement("span");
+      gen.textContent = `gen ${entry.generation}`;
+      const dist = document.createElement("b");
+      dist.textContent = `${entry.distance.toFixed(1)} m`;
+      const play = document.createElement("button");
+      play.textContent = "Replay";
+      play.addEventListener("click", () => app.replayEntry(entry));
+      const save = document.createElement("button");
+      save.textContent = "Export";
+      save.addEventListener("click", () => download(`car-gen-${entry.generation}-${i}.json`, exportGenome(entry.genome, entry)));
+      row.append(swatch, gen, dist, play, save);
+      list.append(row);
+    });
+    list.scrollTop = list.scrollHeight;
+  }
+
+  $("h-export").addEventListener("click", () => download("hall-of-fame.json", exportHof(hof)));
+  $("h-export-best").addEventListener("click", () => {
+    const best = hof.best();
+    if (best) download("best-car.json", exportGenome(best.genome, best));
+    else $("h-msg").textContent = "Nothing to export yet. Finish a generation first.";
+  });
+  $("h-import-btn").addEventListener("click", () => $("h-import").click());
+  $<HTMLInputElement>("h-import").addEventListener("change", async (ev) => {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const entries = importHof(await file.text());
+      hof.entries.push(...entries);
+      renderHof();
+      $("h-msg").textContent = `Imported ${entries.length} car${entries.length === 1 ? "" : "s"} from ${file.name}.`;
+    } catch (e) {
+      $("h-msg").textContent = e instanceof GenomeImportError ? e.message : `Could not read ${file.name}.`;
+    }
+    input.value = "";
+  });
+  $("h-live").addEventListener("click", () => {
+    app.replay = null;
+    camera.x = app.sim.entries[app.sim.leaderIndex()].car.chassis.getPosition().x;
+    $("h-msg").textContent = "";
+  });
+
   // ---- controls --------------------------------------------------------
 
   function bindRange(id: string, out: string, digits: number, apply: (v: number) => void): void {
@@ -307,6 +385,7 @@ export function createApp(): App {
   }
 
   drawChart();
+  renderHof();
   updateSeeds();
   window.addEventListener("resize", () => app.render());
   requestAnimationFrame(loop);
