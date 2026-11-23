@@ -1,0 +1,32 @@
+{
+  "name": "evolve-cars",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A BoxCar2D-style genetic algorithm in TypeScript: cars evolve to cross procedural terrain, simulated with planck.js in the browser or headless in Node.",
+  "author": "Jashwanth Neela",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "evolve": "tsx src/headless.ts"
+  },
+  "dependencies": {
+    "planck": "^1.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@vitest/coverage-v8": "^4.1.12",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^4.1.12"
+  }
+}
