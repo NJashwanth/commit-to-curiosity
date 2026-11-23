@@ -18,10 +18,10 @@ export interface Terrain {
 export const STEP = 1; // metres between terrain points
 export const FLAT_START = 14; // metres of flat ground to spawn on
 export const DEFAULT_LENGTH = 700;
-export const RAMP_DISTANCE = 260;
+export const RAMP_DISTANCE = 160;
 export const MAX_SLOPE = 1.0; // rise over run at full difficulty (45 degrees)
-export const UPHILL_BIAS = 0.12; // mean extra slope per step at full difficulty, so the climb gets harder
-export const MAX_BUMP = 0.6; // metres of random jitter at full difficulty
+export const UPHILL_BIAS = 0.3; // mean extra slope per step at full difficulty, so the climb gets harder
+export const MAX_BUMP = 0.9; // metres of random jitter at full difficulty
 
 /** 0 at the start, 1 once the track is as hard as it gets. */
 export function difficultyAt(x: number): number {

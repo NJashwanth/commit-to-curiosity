@@ -31,7 +31,7 @@ export const DEFAULT_SIM: SimConfig = {
   flipSeconds: 1.5,
   flipAngle: 2.0,
   flipSpeed: 0.4,
-  maxSeconds: 45,
+  maxSeconds: 90,
 };
 
 export type DeathReason = "stall" | "flip" | "timeout" | "finish";

@@ -5,6 +5,7 @@ import { defineConfig } from "vitest/config";
 // exercised by hand and by the Playwright screenshots instead.
 export const CORE_FILES = [
   "src/rng.ts",
+  "src/chart.ts",
   "src/genome.ts",
   "src/terrain.ts",
   "src/physics.ts",
