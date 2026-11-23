@@ -8,7 +8,7 @@ import { heightAt, type Terrain } from "./terrain";
 
 export const GRAVITY = -10;
 export const SPAWN_X = 4;
-export const MOTOR_SPEED = 11; // rad/s, wheels spin clockwise to drive right
+export const MOTOR_SPEED = 9; // rad/s, wheels spin clockwise to drive right
 const CAR_GROUP = -1;
 
 export interface Car {
@@ -73,7 +73,7 @@ export function buildCar(world: World, genome: Genome, terrain: Terrain): Car {
         {
           enableMotor: true,
           motorSpeed: -MOTOR_SPEED,
-          maxMotorTorque: 10 + 45 * mass,
+          maxMotorTorque: 5 + 22 * mass,
         },
         chassis,
         wheel,

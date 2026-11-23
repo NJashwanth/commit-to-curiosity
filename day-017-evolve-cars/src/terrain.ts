@@ -18,9 +18,10 @@ export interface Terrain {
 export const STEP = 1; // metres between terrain points
 export const FLAT_START = 14; // metres of flat ground to spawn on
 export const DEFAULT_LENGTH = 700;
-export const RAMP_DISTANCE = 450;
-export const MAX_SLOPE = 0.85; // rise over run at full difficulty (about 40 degrees)
-export const MAX_BUMP = 0.35; // metres of random jitter at full difficulty
+export const RAMP_DISTANCE = 260;
+export const MAX_SLOPE = 1.0; // rise over run at full difficulty (45 degrees)
+export const UPHILL_BIAS = 0.12; // mean extra slope per step at full difficulty, so the climb gets harder
+export const MAX_BUMP = 0.6; // metres of random jitter at full difficulty
 
 /** 0 at the start, 1 once the track is as hard as it gets. */
 export function difficultyAt(x: number): number {
@@ -38,9 +39,9 @@ export function generateTerrain(seed: number, length = DEFAULT_LENGTH): Terrain 
     points.push({ x, y });
     if (x < FLAT_START) continue;
     const d = difficultyAt(x);
-    const limit = 0.06 + (MAX_SLOPE - 0.06) * d;
+    const limit = 0.1 + (MAX_SLOPE - 0.1) * d;
     // The slope is a mean-reverting random walk, so hills are smooth but vary.
-    slope = slope * 0.8 + rng.gaussian(0, limit * 0.55);
+    slope = slope * 0.8 + rng.gaussian(UPHILL_BIAS * d, limit * 0.55);
     slope = Math.max(-limit, Math.min(limit, slope));
     const bump = rng.gaussian(0, MAX_BUMP * d * d);
     y += slope * STEP + bump;

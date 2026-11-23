@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FLAT_START, STEP, difficultyAt, generateTerrain, heightAt, maxSlopeBetween } from "../src/terrain";
+import { FLAT_START, RAMP_DISTANCE, STEP, difficultyAt, generateTerrain, heightAt, maxSlopeBetween } from "../src/terrain";
 
 describe("terrain", () => {
   it("is identical for the same seed and differs between seeds", () => {
@@ -31,7 +31,7 @@ describe("terrain", () => {
   it("difficulty ramps from 0 to 1", () => {
     expect(difficultyAt(0)).toBe(0);
     expect(difficultyAt(FLAT_START)).toBe(0);
-    expect(difficultyAt(FLAT_START + 225)).toBeCloseTo(0.5);
+    expect(difficultyAt(FLAT_START + RAMP_DISTANCE / 2)).toBeCloseTo(0.5);
     expect(difficultyAt(10000)).toBe(1);
   });
 
