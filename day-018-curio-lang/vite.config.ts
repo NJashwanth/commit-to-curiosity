@@ -7,6 +7,8 @@ export const CORE_FILES = [
   "src/token.ts",
   "src/errors.ts",
   "src/lexer.ts",
+  "src/ast.ts",
+  "src/parser.ts",
 ];
 
 export default defineConfig({
