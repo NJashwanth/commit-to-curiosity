@@ -1,5 +1,8 @@
 // Runtime values and the rules about them: truthiness, equality, type names, printing.
 
+import type { Block } from "./ast.js";
+import type { Environment } from "./environment.js";
+
 /** What a native (TypeScript) function can ask the interpreter to do. */
 export interface NativeContext {
   /** Write text to the program's output. */
@@ -16,8 +19,18 @@ export class NativeFunction {
   ) {}
 }
 
+/** A function defined in Curio code, together with the scope it was created in (its closure). */
+export class CurioFunction {
+  constructor(
+    readonly name: string | null,
+    readonly params: string[],
+    readonly body: Block,
+    readonly closure: Environment,
+  ) {}
+}
+
 /** nil is represented as null. */
-export type Value = number | string | boolean | null | NativeFunction;
+export type Value = number | string | boolean | null | NativeFunction | CurioFunction;
 
 export function typeOf(v: Value): string {
   if (v === null) return "nil";
@@ -52,6 +65,6 @@ export function stringify(v: Value, quoteStrings = false): string {
     case "string":
       return quoteStrings ? JSON.stringify(v) : v;
     default:
-      return `<native fn ${v.name}>`;
+      return v instanceof NativeFunction ? `<native fn ${v.name}>` : `<fn ${v.name ?? "anonymous"}>`;
   }
 }

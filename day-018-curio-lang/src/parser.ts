@@ -176,7 +176,10 @@ export class Parser {
         case T.RBrace:
           if (depth === 0) return;
           this.advance();
-          if (--depth === 0) return;
+          if (--depth === 0) {
+            this.match(T.Semicolon); // `let f = fn { };` : the `;` belongs to the statement we skipped
+            return;
+          }
           break;
         case T.Let:
         case T.Fn:
@@ -235,11 +238,52 @@ export class Parser {
       }
       case T.LBrace:
         return this.block();
-      default: {
-        const expr = this.parseExpression();
-        this.endStatement("Expected ';' after expression");
-        return { kind: "ExprStmt", expr, pos };
-      }
+      case T.Fn:
+        // `fn name(...) { }` declares a function; `fn(...) { }` is an expression.
+        if (this.tokens[this.current + 1]?.type === T.Ident) return this.fnDeclaration();
+        return this.expressionStatement(pos);
+      default:
+        return this.expressionStatement(pos);
+    }
+  }
+
+  private expressionStatement(pos: Pos): Stmt {
+    const expr = this.parseExpression();
+    this.endStatement("Expected ';' after expression");
+    return { kind: "ExprStmt", expr, pos };
+  }
+
+  /** `fn name(a, b) { ... }` is sugar for `let name = fn(a, b) { ... };` */
+  private fnDeclaration(): Stmt {
+    const tok = this.advance();
+    const name = this.advance();
+    const fn = this.functionRest(tok, name.lexeme);
+    return { kind: "Let", name: name.lexeme, init: fn, pos: posOf(tok) };
+  }
+
+  /** Everything after `fn` (and the optional name): `(params) { body }`. */
+  private functionRest(fnTok: Token, name: string | null): Expr {
+    this.consume(T.LParen, "Expected '(' after 'fn'");
+    const params: string[] = [];
+    if (!this.check(T.RParen)) {
+      do {
+        if (this.check(T.RParen)) break; // trailing comma
+        const p = this.consume(T.Ident, "Expected parameter name");
+        if (params.includes(p.lexeme)) this.report(p, `Duplicate parameter '${p.lexeme}'`);
+        params.push(p.lexeme);
+      } while (this.match(T.Comma));
+    }
+    this.consume(T.RParen, "Expected ')' after parameters");
+    // A function body starts a fresh context: outer loops do not apply, `return` does.
+    const savedLoops = this.loopDepth;
+    this.loopDepth = 0;
+    this.fnDepth++;
+    try {
+      const body = this.block("Expected '{' before function body");
+      return { kind: "Function", name, params, body, pos: posOf(fnTok) };
+    } finally {
+      this.fnDepth--;
+      this.loopDepth = savedLoops;
     }
   }
 
@@ -248,6 +292,7 @@ export class Parser {
     const name = this.consume(T.Ident, "Expected variable name after 'let'");
     let init: Expr | null = null;
     if (this.match(T.Eq)) init = this.parseExpression();
+    if (init?.kind === "Function" && init.name === null) init.name = name.lexeme; // for stack traces
     this.endStatement("Expected ';' after variable declaration");
     return { kind: "Let", name: name.lexeme, init, pos: posOf(tok) };
   }
@@ -318,6 +363,7 @@ export class Parser {
           // Right associative: a = b = c is a = (b = c).
           const value = this.parseExpression(Prec.Assign);
           if (left.kind === "Ident" || left.kind === "Index") {
+            if (left.kind === "Ident" && value.kind === "Function" && value.name === null) value.name = left.name;
             left = { kind: "Assign", target: left, value, pos: posOf(tok) };
           } else {
             this.report(tok, "Invalid assignment target");
@@ -381,6 +427,8 @@ export class Parser {
       case T.Minus:
       case T.Bang:
         return { kind: "Unary", op: tok.type, operand: this.parseExpression(Prec.Unary), pos };
+      case T.Fn:
+        return this.functionRest(tok, null);
       case T.LParen: {
         const inner = this.parseExpression();
         this.consume(T.RParen, "Expected ')' after expression");

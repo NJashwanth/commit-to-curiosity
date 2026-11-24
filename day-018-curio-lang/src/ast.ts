@@ -21,7 +21,8 @@ export type Expr =
   | { kind: "Logical"; op: LogicalOp; left: Expr; right: Expr; pos: Pos }
   | { kind: "Assign"; target: Expr; value: Expr; pos: Pos }
   | { kind: "Call"; callee: Expr; args: Expr[]; pos: Pos }
-  | { kind: "Index"; object: Expr; index: Expr; pos: Pos };
+  | { kind: "Index"; object: Expr; index: Expr; pos: Pos }
+  | { kind: "Function"; name: string | null; params: string[]; body: Block; pos: Pos };
 
 export type Stmt =
   | { kind: "Let"; name: string; init: Expr | null; pos: Pos }
@@ -69,10 +70,14 @@ export function toSexpr(e: Expr): string {
       return `(call ${[e.callee, ...e.args].map(toSexpr).join(" ")})`;
     case "Index":
       return `(index ${toSexpr(e.object)} ${toSexpr(e.index)})`;
+    case "Function":
+      return `(fn ${e.name ?? "_"} (${e.params.join(" ")}))`;
   }
 }
 
 type Child = [role: string | null, node: Node];
+
+const e_name = (name: string | null) => name ?? "<anonymous>";
 
 function describe(n: Node): { label: string; children: Child[] } {
   switch (n.kind) {
@@ -97,6 +102,8 @@ function describe(n: Node): { label: string; children: Child[] } {
       return { label: "Call", children: [["callee", n.callee], ...n.args.map((a): Child => ["arg", a])] };
     case "Index":
       return { label: "Index", children: [["object", n.object], ["index", n.index]] };
+    case "Function":
+      return { label: `Function ${e_name(n.name)}(${n.params.join(", ")})`, children: [["body", n.body]] };
     case "Let":
       return { label: `Let ${n.name}`, children: n.init ? [[null, n.init]] : [] };
     case "ExprStmt":
