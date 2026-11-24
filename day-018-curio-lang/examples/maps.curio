@@ -1,0 +1,20 @@
+// Maps hold key/value pairs; arrays of maps make small records.
+let people = [
+  {name: "Ada", age: 36, tags: ["math", "code"]},
+  {name: "Alan", age: 41, tags: ["logic"]},
+  {name: "Grace", age: 85, tags: ["compilers", "navy"]},
+];
+
+for p in people {
+  print("${p["name"]} (${p["age"]}) likes ${join(p["tags"], " and ")}");
+}
+
+let ages = map(people, fn(p) { p["age"]; });
+print("average age: ${reduce(ages, fn(a, b) { a + b; }, 0) / len(ages)}");
+
+let byName = {};
+for p in people { byName[p["name"]] = p; }
+print(keys(byName));
+byName["Ada"]["age"] = 37;
+print(people[0]["age"]);
+print(has(byName, "Linus"), type(byName), len(byName));

@@ -1,0 +1,15 @@
+// Sieve of Eratosthenes: primes up to 50.
+let limit = 50;
+let isPrime = map(range(limit + 1), fn(i) { i >= 2; });
+
+for n in range(2, limit + 1) {
+  if isPrime[n] {
+    for multiple in range(n * n, limit + 1, n) {
+      isPrime[multiple] = false;
+    }
+  }
+}
+
+let primes = filter(range(limit + 1), fn(i) { isPrime[i]; });
+print("primes up to ${limit}: ${primes}");
+print("count: ${len(primes)}, sum: ${reduce(primes, fn(a, b) { a + b; }, 0)}");

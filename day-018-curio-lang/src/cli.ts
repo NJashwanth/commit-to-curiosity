@@ -114,6 +114,12 @@ function startRepl(): void {
   });
 }
 
+// Quietly stop when the reader goes away (for example `curio big.curio | head`).
+process.stdout.on("error", (e: NodeJS.ErrnoException) => {
+  if (e.code === "EPIPE") process.exit(0);
+  throw e;
+});
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = main(process.argv.slice(2));
   if (result === "repl") startRepl();
