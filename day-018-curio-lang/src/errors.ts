@@ -61,3 +61,38 @@ export function formatDiagnostics(source: string, ds: Diagnostic[], filename?: s
   const n = ds.length;
   return `${body}\n\n${n} syntax error${n === 1 ? "" : "s"} found.`;
 }
+
+/** One line of a stack trace: the function and the line currently executing inside it. */
+export interface TraceFrame {
+  name: string;
+  line: number;
+}
+
+/**
+ * A runtime error. `line` and `col` locate the failing expression; `trace` lists the active
+ * calls, innermost first, ending with `<main>`. Native functions throw these with line 0 and
+ * the interpreter fills in the location of the call.
+ */
+export class CurioRuntimeError extends Error {
+  constructor(
+    message: string,
+    public line = 0,
+    public col = 0,
+    public trace: TraceFrame[] = [],
+  ) {
+    super(message);
+    this.name = "CurioRuntimeError";
+  }
+
+  format(source: string, filename?: string): string {
+    const file = filename ?? "<input>";
+    const out = [formatDiagnostic(source, { message: this.message, line: this.line, col: this.col }, filename, "runtime error")];
+    out.push("", "Stack trace (most recent call first):");
+    const t = this.trace;
+    const shown = t.length > 14 ? [...t.slice(0, 8), null, ...t.slice(-3)] : t;
+    for (const f of shown) {
+      out.push(f === null ? `  ... ${t.length - 11} more calls ...` : `  at ${f.name} (${file}:${f.line})`);
+    }
+    return out.join("\n");
+  }
+}

@@ -9,6 +9,10 @@ export const CORE_FILES = [
   "src/lexer.ts",
   "src/ast.ts",
   "src/parser.ts",
+  "src/values.ts",
+  "src/environment.ts",
+  "src/stdlib.ts",
+  "src/interpreter.ts",
 ];
 
 export default defineConfig({
