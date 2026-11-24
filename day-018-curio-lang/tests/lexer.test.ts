@@ -107,7 +107,7 @@ describe("lexer: numbers", () => {
     const r = lex("12abc + 1");
     expect(r.errors).toHaveLength(1);
     expect(r.errors[0]).toMatchObject({ message: "Invalid number '12abc'", line: 1, col: 1, length: 5 });
-    expect(r.tokens.map((t) => t.type)).toEqual([T.Number, T.Plus, T.Number, T.EOF]);
+    expect(r.tokens.map((t) => t.type)).toEqual([T.Error, T.Plus, T.Number, T.EOF]);
   });
 });
 
@@ -144,7 +144,7 @@ describe("lexer: strings", () => {
     const r = lex('let s = "oops');
     expect(r.errors).toHaveLength(1);
     expect(r.errors[0]).toMatchObject({ message: "Unterminated string", line: 1, col: 9, atEof: true });
-    expect(r.tokens.map((t) => t.type)).toEqual([T.Let, T.Ident, T.Eq, T.EOF]);
+    expect(r.tokens.map((t) => t.type)).toEqual([T.Let, T.Ident, T.Eq, T.Error, T.EOF]);
   });
 
   it("ends an unterminated string at the newline and lexes the next line normally", () => {
@@ -152,7 +152,8 @@ describe("lexer: strings", () => {
     expect(r.errors).toHaveLength(1);
     expect(r.errors[0]).toMatchObject({ message: "Unterminated string", line: 1, col: 1 });
     expect(r.errors[0]!.atEof).toBeUndefined();
-    expect(r.tokens[0]).toMatchObject({ type: T.Let, line: 2, col: 1 });
+    expect(r.tokens[0]).toMatchObject({ type: T.Error, lexeme: '"oops' });
+    expect(r.tokens[1]).toMatchObject({ type: T.Let, line: 2, col: 1 });
   });
 
   it("treats a trailing backslash as an unterminated string", () => {
@@ -207,6 +208,7 @@ describe("lexer: interpolation", () => {
       col: 4,
       atEof: true,
     });
+    expect(r.tokens.map((t) => t.type)).toEqual([T.Error, T.EOF]);
   });
 });
 
@@ -245,13 +247,15 @@ describe("lexer: unknown characters", () => {
       ["Unexpected character '#'", 2, 7],
     ]);
     expect(r.tokens.filter((t) => t.type === T.Number)).toHaveLength(2);
+    expect(r.tokens.filter((t) => t.type === T.Error).map((t) => t.lexeme)).toEqual(["@", "#"]);
   });
 
   it("handles astral characters as a single unit", () => {
     const r = lex("😀 1");
     expect(r.errors).toHaveLength(1);
     expect(r.errors[0]).toMatchObject({ message: "Unexpected character '😀'", col: 1, length: 2 });
-    expect(r.tokens[0]).toMatchObject({ type: T.Number, col: 4 });
+    expect(r.tokens.map((t) => t.type)).toEqual([T.Error, T.Number, T.EOF]);
+    expect(r.tokens[1]).toMatchObject({ col: 4 });
   });
 });
 

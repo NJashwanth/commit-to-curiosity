@@ -23,6 +23,28 @@ export type Expr =
   | { kind: "Call"; callee: Expr; args: Expr[]; pos: Pos }
   | { kind: "Index"; object: Expr; index: Expr; pos: Pos };
 
+export type Stmt =
+  | { kind: "Let"; name: string; init: Expr | null; pos: Pos }
+  | { kind: "ExprStmt"; expr: Expr; pos: Pos }
+  | { kind: "Block"; body: Stmt[]; pos: Pos }
+  | { kind: "If"; cond: Expr; then: Block; otherwise: Block | IfStmt | null; pos: Pos }
+  | { kind: "While"; cond: Expr; body: Block; pos: Pos }
+  | { kind: "For"; variable: string; iterable: Expr; body: Block; pos: Pos }
+  | { kind: "Return"; value: Expr | null; pos: Pos }
+  | { kind: "Break"; pos: Pos }
+  | { kind: "Continue"; pos: Pos };
+
+export type Block = Extract<Stmt, { kind: "Block" }>;
+export type IfStmt = Extract<Stmt, { kind: "If" }>;
+
+export interface Program {
+  kind: "Program";
+  body: Stmt[];
+  pos: Pos;
+}
+
+export type Node = Expr | Stmt | Program;
+
 /** Compact S-expression form of an expression, used by tests and debugging: `(+ 1 (* 2 3))`. */
 export function toSexpr(e: Expr): string {
   switch (e.kind) {
@@ -48,4 +70,66 @@ export function toSexpr(e: Expr): string {
     case "Index":
       return `(index ${toSexpr(e.object)} ${toSexpr(e.index)})`;
   }
+}
+
+type Child = [role: string | null, node: Node];
+
+function describe(n: Node): { label: string; children: Child[] } {
+  switch (n.kind) {
+    case "Number":
+      return { label: `Number ${n.value}`, children: [] };
+    case "String":
+      return { label: `String ${JSON.stringify(n.value)}`, children: [] };
+    case "Bool":
+      return { label: `Bool ${n.value}`, children: [] };
+    case "Nil":
+      return { label: "Nil", children: [] };
+    case "Ident":
+      return { label: `Ident ${n.name}`, children: [] };
+    case "Unary":
+      return { label: `Unary ${n.op}`, children: [[null, n.operand]] };
+    case "Binary":
+    case "Logical":
+      return { label: `${n.kind} ${n.op}`, children: [[null, n.left], [null, n.right]] };
+    case "Assign":
+      return { label: "Assign", children: [["target", n.target], ["value", n.value]] };
+    case "Call":
+      return { label: "Call", children: [["callee", n.callee], ...n.args.map((a): Child => ["arg", a])] };
+    case "Index":
+      return { label: "Index", children: [["object", n.object], ["index", n.index]] };
+    case "Let":
+      return { label: `Let ${n.name}`, children: n.init ? [[null, n.init]] : [] };
+    case "ExprStmt":
+      return { label: "ExprStmt", children: [[null, n.expr]] };
+    case "Block":
+    case "Program":
+      return { label: n.kind, children: n.body.map((s): Child => [null, s]) };
+    case "If": {
+      const kids: Child[] = [["cond", n.cond], ["then", n.then]];
+      if (n.otherwise) kids.push(["else", n.otherwise]);
+      return { label: "If", children: kids };
+    }
+    case "While":
+      return { label: "While", children: [["cond", n.cond], ["body", n.body]] };
+    case "For":
+      return { label: `For ${n.variable}`, children: [["in", n.iterable], ["body", n.body]] };
+    case "Return":
+      return { label: "Return", children: n.value ? [[null, n.value]] : [] };
+    case "Break":
+      return { label: "Break", children: [] };
+    case "Continue":
+      return { label: "Continue", children: [] };
+  }
+}
+
+/** Indented tree view of any node, used for snapshot tests and the README: one node per line. */
+export function dumpAst(node: Node, indent = 0): string {
+  const { label, children } = describe(node);
+  const lines = [`${"  ".repeat(indent)}${label}`];
+  for (const [role, child] of children) {
+    const sub = dumpAst(child, indent + 1).split("\n");
+    if (role) sub[0] = `${"  ".repeat(indent + 1)}${role}: ${sub[0]!.trimStart()}`;
+    lines.push(...sub);
+  }
+  return lines.join("\n");
 }

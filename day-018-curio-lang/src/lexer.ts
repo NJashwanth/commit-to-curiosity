@@ -94,43 +94,41 @@ class Lexer {
 
   // --- scanning ----------------------------------------------------------
 
-  /** Scan until a real token (or EOF) is produced, reporting any bad input on the way. */
+  /**
+   * Scan one token. Bad input is reported as a diagnostic and returned as an Error token, so
+   * the parser knows something was there but does not report it a second time.
+   */
   private next(): Token {
-    for (;;) {
-      this.skipTrivia();
-      if (this.atEnd()) return this.make(T.EOF, "", this.line, this.col);
+    this.skipTrivia();
+    if (this.atEnd()) return this.make(T.EOF, "", this.line, this.col);
 
-      const line = this.line;
-      const col = this.col;
-      const start = this.pos;
-      const c = this.peek();
+    const line = this.line;
+    const col = this.col;
+    const start = this.pos;
+    const c = this.peek();
 
-      if (isDigit(c)) return this.number(line, col, start);
-      if (isAlpha(c)) return this.identifier(line, col, start);
-      if (c === '"' || c === "'") {
-        const tok = this.string(c, line, col, start);
-        if (tok) return tok;
-        continue; // unterminated string: error already recorded
-      }
+    if (isDigit(c)) return this.number(line, col, start);
+    if (isAlpha(c)) return this.identifier(line, col, start);
+    if (c === '"' || c === "'") return this.string(c, line, col, start);
 
-      const two = c + this.peek(1);
-      const twoType = { "!=": T.BangEq, "==": T.EqEq, "<=": T.Le, ">=": T.Ge }[two];
-      if (twoType) {
-        this.advance();
-        this.advance();
-        return this.make(twoType, two, line, col);
-      }
-      const oneType = ONE_CHAR[c] ?? { "!": T.Bang, "=": T.Eq, "<": T.Lt, ">": T.Gt }[c];
-      if (oneType) {
-        this.advance();
-        return this.make(oneType, c, line, col);
-      }
-
-      // Unknown character (handle astral characters as one unit).
-      const ch = String.fromCodePoint(this.src.codePointAt(this.pos)!);
-      for (let i = 0; i < ch.length; i++) this.advance();
-      this.error(`Unexpected character '${ch}'`, line, col, ch.length);
+    const two = c + this.peek(1);
+    const twoType = { "!=": T.BangEq, "==": T.EqEq, "<=": T.Le, ">=": T.Ge }[two];
+    if (twoType) {
+      this.advance();
+      this.advance();
+      return this.make(twoType, two, line, col);
     }
+    const oneType = ONE_CHAR[c] ?? { "!": T.Bang, "=": T.Eq, "<": T.Lt, ">": T.Gt }[c];
+    if (oneType) {
+      this.advance();
+      return this.make(oneType, c, line, col);
+    }
+
+    // Unknown character (handle astral characters as one unit).
+    const ch = String.fromCodePoint(this.src.codePointAt(this.pos)!);
+    for (let i = 0; i < ch.length; i++) this.advance();
+    this.error(`Unexpected character '${ch}'`, line, col, ch.length);
+    return this.make(T.Error, ch, line, col);
   }
 
   private skipTrivia(): void {
@@ -178,7 +176,7 @@ class Lexer {
       while (isAlnum(this.peek())) this.advance();
       const bad = this.src.slice(start, this.pos);
       this.error(`Invalid number '${bad}'`, line, col, bad.length);
-      return this.make(T.Number, bad, line, col, { value: 0 });
+      return this.make(T.Error, bad, line, col);
     }
     const lexeme = this.src.slice(start, this.pos);
     return this.make(T.Number, lexeme, line, col, { value: Number(lexeme) });
@@ -191,8 +189,7 @@ class Lexer {
     return this.make(kw ?? T.Ident, lexeme, line, col);
   }
 
-  /** Returns null when the string is unterminated (an error has been recorded). */
-  private string(quote: string, line: number, col: number, start: number): Token | null {
+  private string(quote: string, line: number, col: number, start: number): Token {
     this.advance(); // opening quote
     const parts: TemplatePart[] = [];
     let text = "";
@@ -201,7 +198,7 @@ class Lexer {
     for (;;) {
       if (this.atEnd() || this.peek() === "\n") {
         this.error("Unterminated string", line, col, this.pos - start, this.atEnd());
-        return null;
+        return this.make(T.Error, this.src.slice(start, this.pos), line, col);
       }
       const c = this.peek();
       if (c === quote) {
@@ -228,7 +225,7 @@ class Lexer {
         this.advance();
         this.advance();
         const exprTokens = this.interpolation(exprLine, exprCol);
-        if (exprTokens === null) return null;
+        if (exprTokens === null) return this.make(T.Error, this.src.slice(start, this.pos), line, col);
         hasInterpolation = true;
         if (text) parts.push(text);
         text = "";

@@ -141,11 +141,11 @@ describe("parser: expression errors", () => {
     expect(r.errors[0]).toMatchObject({ line: 1, col: 3 });
   });
 
-  it("merges lexer errors with parser errors in source order", () => {
-    const r = parseExpr("1 + @");
-    expect(r.errors.map((e) => e.message)).toEqual([
-      "Unexpected character '@'",
-      "Expected expression, found end of input",
+  it("does not report a lexer error twice, and orders mixed errors by position", () => {
+    expect(parseExpr("1 + @").errors.map((e) => e.message)).toEqual(["Unexpected character '@'"]);
+    expect(parseExpr("1 + ) @").errors.map((e) => `${e.col} ${e.message}`)).toEqual([
+      "5 Expected expression, found ')'",
+      "7 Unexpected character '@'",
     ]);
   });
 });

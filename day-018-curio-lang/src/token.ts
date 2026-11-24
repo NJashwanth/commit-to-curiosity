@@ -51,6 +51,8 @@ export enum T {
   Colon = ":",
 
   EOF = "EOF",
+  /** Bad input (unknown character, unterminated string). The lexer has already reported it. */
+  Error = "Error",
 }
 
 /** A piece of a template string: literal text, or the tokens of one `${...}` expression. */
