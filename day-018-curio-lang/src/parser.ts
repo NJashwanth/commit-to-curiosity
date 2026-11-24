@@ -69,6 +69,10 @@ export class Parser {
   protected loopDepth = 0;
   /** How many function bodies enclose the statement being parsed (for return checks). */
   protected fnDepth = 0;
+  /** Map literals currently being parsed: their closing `}` is still ahead when an error hits. */
+  private openMaps = 0;
+  /** `openMaps` as it was when the latest error was raised (recovery needs it after unwinding). */
+  private failedInMaps = 0;
 
   constructor(
     protected readonly tokens: Token[],
@@ -115,6 +119,7 @@ export class Parser {
   /** Record an error and return an exception the caller can throw to unwind. */
   protected fail(tok: Token, message: string): ParseError {
     const d = this.diagnosticAt(tok, message);
+    this.failedInMaps = this.openMaps;
     // An Error token was already reported by the lexer; just unwind so we do not pile on.
     if (tok.type !== T.Error) this.errors.push(d);
     return new ParseError(d);
@@ -154,7 +159,7 @@ export class Parser {
       return this.statement();
     } catch (e) {
       if (!(e instanceof ParseError)) throw e;
-      this.synchronize(start);
+      this.synchronize(start, this.failedInMaps);
       return null;
     }
   }
@@ -163,22 +168,28 @@ export class Parser {
    * Panic-mode recovery. Skip tokens until just after a `;`, or just before something that
    * starts a statement (or closes a block), so one mistake yields one error, not a cascade.
    */
-  private synchronize(start: number): void {
+  private synchronize(start: number, openMaps: number): void {
     if (this.current === start && !this.atEnd()) this.advance(); // always make progress
-    let depth = 0; // braces opened while skipping, so a skipped block is skipped whole
+    let skipped = 0; // `{` seen while skipping, so a skipped block is skipped whole
     while (!this.atEnd()) {
-      if (depth === 0 && this.previous().type === T.Semicolon) return;
+      if (skipped === 0 && this.previous().type === T.Semicolon) return;
       switch (this.peek().type) {
         case T.LBrace:
-          depth++;
+          skipped++;
           this.advance();
           break;
         case T.RBrace:
-          if (depth === 0) return;
-          this.advance();
-          if (--depth === 0) {
-            this.match(T.Semicolon); // `let f = fn { };` : the `;` belongs to the statement we skipped
-            return;
+          if (skipped > 0) {
+            this.advance();
+            if (--skipped === 0) {
+              this.match(T.Semicolon); // `let f = fn { };` : the `;` belongs to the skipped statement
+              return;
+            }
+          } else if (openMaps > 0) {
+            this.advance(); // the closing brace of the map literal we were inside
+            openMaps--;
+          } else {
+            return; // the end of the enclosing block (or a stray brace, reported by the caller)
           }
           break;
         case T.Let:
@@ -189,7 +200,7 @@ export class Parser {
         case T.Return:
         case T.Break:
         case T.Continue:
-          if (depth === 0) return;
+          if (skipped === 0) return;
           this.advance();
           break;
         default:
@@ -237,6 +248,8 @@ export class Parser {
         return tok.type === T.Break ? { kind: "Break", pos } : { kind: "Continue", pos };
       }
       case T.LBrace:
+        // `{ key: ...` can only be a map literal (a block never starts with `name:`).
+        if (this.startsMapLiteral()) return this.expressionStatement(pos);
         return this.block();
       case T.Fn:
         // `fn name(...) { }` declares a function; `fn(...) { }` is an expression.
@@ -245,6 +258,13 @@ export class Parser {
       default:
         return this.expressionStatement(pos);
     }
+  }
+
+  private startsMapLiteral(): boolean {
+    const key = this.tokens[this.current + 1]?.type;
+    const colon = this.tokens[this.current + 2]?.type;
+    const keyLike = key === T.Ident || key === T.String || key === T.Number || key === T.True || key === T.False;
+    return keyLike && colon === T.Colon;
   }
 
   private expressionStatement(pos: Pos): Stmt {
@@ -406,6 +426,59 @@ export class Parser {
     return { kind: "Call", callee, args, pos: posOf(open) };
   }
 
+  private arrayLiteral(pos: Pos): Expr {
+    const elements: Expr[] = [];
+    while (!this.check(T.RBracket) && !this.atEnd()) {
+      elements.push(this.parseExpression());
+      if (!this.match(T.Comma)) break;
+    }
+    this.consume(T.RBracket, "Expected ']' after array elements");
+    return { kind: "Array", elements, pos };
+  }
+
+  /** `{ key: value, ... }`. A bare identifier key means the string of the same name. */
+  private mapLiteral(pos: Pos): Expr {
+    const entries: { key: Expr; value: Expr }[] = [];
+    this.openMaps++;
+    while (!this.check(T.RBrace) && !this.atEnd()) {
+      let key: Expr;
+      const first = this.peek();
+      if (first.type === T.Ident && this.tokens[this.current + 1]?.type === T.Colon) {
+        this.advance();
+        key = { kind: "String", value: first.lexeme, pos: posOf(first) };
+      } else {
+        key = this.parseExpression();
+      }
+      this.consume(T.Colon, "Expected ':' after map key");
+      entries.push({ key, value: this.parseExpression() });
+      if (!this.match(T.Comma)) break;
+    }
+    this.consume(T.RBrace, "Expected '}' after map entries");
+    this.openMaps--;
+    return { kind: "Map", entries, pos };
+  }
+
+  /** A string with ${...} parts: parse each embedded token list as its own expression. */
+  private template(tok: Token): Expr {
+    const parts: (string | Expr)[] = [];
+    for (const part of tok.parts!) {
+      if (typeof part === "string") {
+        parts.push(part);
+        continue;
+      }
+      const sub = new Parser(part, this.errors);
+      try {
+        if (sub.check(T.EOF)) throw sub.fail(sub.peek(), "Expected an expression inside '${}'");
+        parts.push(sub.parseExpression());
+        if (!sub.atEnd()) throw sub.fail(sub.peek(), `Unexpected ${describeToken(sub.peek())} in string interpolation`);
+      } catch (e) {
+        this.failedInMaps = this.openMaps;
+        throw e;
+      }
+    }
+    return { kind: "Template", parts, pos: posOf(tok) };
+  }
+
   private parsePrefix(): Expr {
     const tok = this.peek();
     if (tok.type === T.EOF) throw this.fail(tok, "Expected expression, found end of input");
@@ -429,6 +502,12 @@ export class Parser {
         return { kind: "Unary", op: tok.type, operand: this.parseExpression(Prec.Unary), pos };
       case T.Fn:
         return this.functionRest(tok, null);
+      case T.LBracket:
+        return this.arrayLiteral(pos);
+      case T.LBrace:
+        return this.mapLiteral(pos);
+      case T.Template:
+        return this.template(tok);
       case T.LParen: {
         const inner = this.parseExpression();
         this.consume(T.RParen, "Expected ')' after expression");

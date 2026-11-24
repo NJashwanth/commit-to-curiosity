@@ -22,7 +22,10 @@ export type Expr =
   | { kind: "Assign"; target: Expr; value: Expr; pos: Pos }
   | { kind: "Call"; callee: Expr; args: Expr[]; pos: Pos }
   | { kind: "Index"; object: Expr; index: Expr; pos: Pos }
-  | { kind: "Function"; name: string | null; params: string[]; body: Block; pos: Pos };
+  | { kind: "Function"; name: string | null; params: string[]; body: Block; pos: Pos }
+  | { kind: "Array"; elements: Expr[]; pos: Pos }
+  | { kind: "Map"; entries: { key: Expr; value: Expr }[]; pos: Pos }
+  | { kind: "Template"; parts: (string | Expr)[]; pos: Pos };
 
 export type Stmt =
   | { kind: "Let"; name: string; init: Expr | null; pos: Pos }
@@ -72,6 +75,12 @@ export function toSexpr(e: Expr): string {
       return `(index ${toSexpr(e.object)} ${toSexpr(e.index)})`;
     case "Function":
       return `(fn ${e.name ?? "_"} (${e.params.join(" ")}))`;
+    case "Array":
+      return `(array${e.elements.map((x) => " " + toSexpr(x)).join("")})`;
+    case "Map":
+      return `(map${e.entries.map((x) => ` ${toSexpr(x.key)} ${toSexpr(x.value)}`).join("")})`;
+    case "Template":
+      return `(template${e.parts.map((x) => " " + (typeof x === "string" ? JSON.stringify(x) : toSexpr(x))).join("")})`;
   }
 }
 
@@ -104,6 +113,15 @@ function describe(n: Node): { label: string; children: Child[] } {
       return { label: "Index", children: [["object", n.object], ["index", n.index]] };
     case "Function":
       return { label: `Function ${e_name(n.name)}(${n.params.join(", ")})`, children: [["body", n.body]] };
+    case "Array":
+      return { label: "Array", children: n.elements.map((x): Child => [null, x]) };
+    case "Map":
+      return { label: "Map", children: n.entries.flatMap((x): Child[] => [["key", x.key], ["value", x.value]]) };
+    case "Template":
+      return {
+        label: "Template",
+        children: n.parts.map((x): Child => (typeof x === "string" ? [null, { kind: "String", value: x, pos: n.pos }] : ["expr", x])),
+      };
     case "Let":
       return { label: `Let ${n.name}`, children: n.init ? [[null, n.init]] : [] };
     case "ExprStmt":

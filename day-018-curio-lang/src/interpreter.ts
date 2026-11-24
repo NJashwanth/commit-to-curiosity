@@ -7,7 +7,17 @@ import { Environment } from "./environment.js";
 import { CurioRuntimeError, type TraceFrame } from "./errors.js";
 import { parseOrThrow } from "./parser.js";
 import { installStdlib } from "./stdlib.js";
-import { CurioFunction, NativeFunction, isTruthy, stringify, typeOf, valuesEqual, type Value } from "./values.js";
+import {
+  CurioFunction,
+  NativeFunction,
+  isMapKey,
+  isTruthy,
+  stringify,
+  typeOf,
+  valuesEqual,
+  type MapKey,
+  type Value,
+} from "./values.js";
 
 export const DEFAULT_MAX_CALL_DEPTH = 400;
 
@@ -170,8 +180,11 @@ export class Interpreter {
     }
   }
 
+  /** The items a for-in loop visits: array elements, string characters, or map keys. */
   private iterate(v: Value, pos: Pos): Value[] {
+    if (Array.isArray(v)) return [...v]; // a snapshot, so pushing inside the loop cannot make it endless
     if (typeof v === "string") return [...v];
+    if (v instanceof Map) return [...v.keys()];
     return this.fail(`Cannot loop over a value of type ${typeOf(v)}`, pos);
   }
 
@@ -204,20 +217,73 @@ export class Interpreter {
       case "Binary":
         return this.binary(e.op, this.eval(e.left), this.eval(e.right), e.pos);
       case "Assign": {
+        if (e.target.kind === "Index") {
+          const object = this.eval(e.target.object);
+          const index = this.eval(e.target.index);
+          return this.setIndex(object, index, this.eval(e.value), e.target.pos);
+        }
         const value = this.eval(e.value);
-        if (e.target.kind !== "Ident") return this.fail("Cannot assign to this expression", e.pos);
-        if (!this.env.assign(e.target.name, value)) {
-          this.fail(`Undefined variable '${e.target.name}' (declare it with let first)`, e.target.pos);
+        const name = (e.target as Extract<Expr, { kind: "Ident" }>).name;
+        if (!this.env.assign(name, value)) {
+          this.fail(`Undefined variable '${name}' (declare it with let first)`, e.target.pos);
         }
         return value;
       }
       case "Call":
         return this.call(e);
       case "Index":
-        return this.fail("Indexing is not supported yet", e.pos);
+        return this.getIndex(this.eval(e.object), this.eval(e.index), e.pos);
+      case "Array":
+        return e.elements.map((x) => this.eval(x));
+      case "Map": {
+        const map = new Map<MapKey, Value>();
+        for (const entry of e.entries) {
+          const key = this.eval(entry.key);
+          if (!isMapKey(key)) this.fail(`Map keys must be strings, numbers or booleans, got ${typeOf(key)}`, entry.key.pos);
+          map.set(key, this.eval(entry.value));
+        }
+        return map;
+      }
+      case "Template":
+        return e.parts.map((p) => (typeof p === "string" ? p : stringify(this.eval(p)))).join("");
       case "Function":
         return new CurioFunction(e.name, e.params, e.body, this.env);
     }
+  }
+
+  /** Turn a Curio index into a position in a sequence of `length`, or fail. Negative counts from the end. */
+  private position(index: Value, length: number, what: string, pos: Pos): number {
+    if (typeof index !== "number") this.fail(`${what} index must be a number, got ${typeOf(index)}`, pos);
+    if (!Number.isInteger(index)) this.fail(`${what} index must be a whole number, got ${index}`, pos);
+    if (index < -length || index >= length) {
+      this.fail(`Index ${index} is out of range for ${what.toLowerCase()} of length ${length}`, pos);
+    }
+    return index < 0 ? index + length : index;
+  }
+
+  private getIndex(object: Value, index: Value, pos: Pos): Value {
+    if (Array.isArray(object)) return object[this.position(index, object.length, "Array", pos)]!;
+    if (typeof object === "string") return object[this.position(index, object.length, "String", pos)]!;
+    if (object instanceof Map) {
+      if (!isMapKey(index)) this.fail(`Map keys must be strings, numbers or booleans, got ${typeOf(index)}`, pos);
+      if (!object.has(index)) this.fail(`Key ${stringify(index, true)} not found in map`, pos);
+      return object.get(index)!;
+    }
+    return this.fail(`Cannot index a value of type ${typeOf(object)}`, pos);
+  }
+
+  private setIndex(object: Value, index: Value, value: Value, pos: Pos): Value {
+    if (Array.isArray(object)) {
+      object[this.position(index, object.length, "Array", pos)] = value;
+    } else if (object instanceof Map) {
+      if (!isMapKey(index)) this.fail(`Map keys must be strings, numbers or booleans, got ${typeOf(index)}`, pos);
+      object.set(index, value);
+    } else if (typeof object === "string") {
+      this.fail("Strings are immutable: cannot assign to an index of a string", pos);
+    } else {
+      this.fail(`Cannot assign into a value of type ${typeOf(object)}`, pos);
+    }
+    return value;
   }
 
   private binary(op: BinaryOp, a: Value, b: Value, pos: Pos): Value {
@@ -229,6 +295,7 @@ export class Interpreter {
       case "+":
         if (typeof a === "number" && typeof b === "number") return a + b;
         if (typeof a === "string" || typeof b === "string") return stringify(a) + stringify(b);
+        if (Array.isArray(a) && Array.isArray(b)) return [...a, ...b];
         return this.fail(`Cannot add ${typeOf(a)} and ${typeOf(b)}`, pos);
       case "<":
       case "<=":
@@ -308,7 +375,7 @@ export class Interpreter {
       this.fail(`${fn.name}() takes ${arityText(fn.minArgs, fn.maxArgs)} but got ${args.length}`, pos);
     }
     try {
-      return fn.fn(args, { out: this.out });
+      return fn.fn(args, { out: this.out, call: (f, a) => this.callValue(f, a, pos) });
     } catch (err) {
       throw this.asRuntimeError(err, pos);
     }
