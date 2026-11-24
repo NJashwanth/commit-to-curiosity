@@ -544,9 +544,9 @@ export interface ParseResult {
   errors: Diagnostic[];
 }
 
-/** Parse a whole program. Never throws: syntax errors come back in `errors`. */
-export function parse(source: string): ParseResult {
-  const lexed = lex(source);
+/** Parse a whole program (numbering lines from `startLine`). Never throws: syntax errors come back in `errors`. */
+export function parse(source: string, startLine = 1): ParseResult {
+  const lexed = lex(source, startLine);
   const errors = [...lexed.errors];
   const program = new Parser(lexed.tokens, errors).parseProgram();
   return { program, errors: dedupe(sortDiagnostics(errors)) };

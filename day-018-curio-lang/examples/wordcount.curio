@@ -1,0 +1,22 @@
+// Count words with a map, then list them by frequency (ties alphabetical).
+let text = "the quick brown fox jumps over the lazy dog the fox";
+let counts = {};
+
+for word in split(lower(text), " ") {
+  if has(counts, word) {
+    counts[word] = counts[word] + 1;
+  } else {
+    counts[word] = 1;
+  }
+}
+
+let words = sort(keys(counts), fn(a, b) {
+  if counts[a] != counts[b] { return counts[b] - counts[a]; }
+  if a < b { return -1; }
+  return 1;
+});
+
+for w in words {
+  print("${w}: ${counts[w]}");
+}
+print("${len(words)} distinct words");

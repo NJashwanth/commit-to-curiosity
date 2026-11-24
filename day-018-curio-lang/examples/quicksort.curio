@@ -1,0 +1,41 @@
+// Quicksort, first with filter and array concatenation, then in place with index assignment.
+fn quicksort(items) {
+  if len(items) <= 1 { return items; }
+  let pivot = items[0];
+  let rest = slice(items, 1);
+  let smaller = filter(rest, fn(x) { x < pivot; });
+  let larger = filter(rest, fn(x) { x >= pivot; });
+  return quicksort(smaller) + [pivot] + quicksort(larger);
+}
+
+let data = [33, 4, 15, 8, 23, 42, 16, 4, 1];
+print("before:   ${data}");
+print("sorted:   ${quicksort(data)}");
+
+fn partition(a, lo, hi) {
+  let pivot = a[hi];
+  let i = lo - 1;
+  for j in range(lo, hi) {
+    if a[j] <= pivot {
+      i = i + 1;
+      let tmp = a[i];
+      a[i] = a[j];
+      a[j] = tmp;
+    }
+  }
+  let tmp = a[i + 1];
+  a[i + 1] = a[hi];
+  a[hi] = tmp;
+  return i + 1;
+}
+
+fn sortInPlace(a, lo, hi) {
+  if lo < hi {
+    let p = partition(a, lo, hi);
+    sortInPlace(a, lo, p - 1);
+    sortInPlace(a, p + 1, hi);
+  }
+}
+
+sortInPlace(data, 0, len(data) - 1);
+print("in place: ${data}");

@@ -13,6 +13,8 @@ export const CORE_FILES = [
   "src/environment.ts",
   "src/stdlib.ts",
   "src/interpreter.ts",
+  "src/repl.ts",
+  "src/cli.ts",
 ];
 
 export default defineConfig({

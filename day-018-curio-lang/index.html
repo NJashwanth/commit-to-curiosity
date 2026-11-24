@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Curio Playground</title>
+    <meta name="description" content="Write and run Curio, a small dynamic language, right in the browser." />
+    <link rel="stylesheet" href="/src/playground.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <h1>Curio <span>playground</span></h1>
+      <div class="controls">
+        <label for="examples">Example</label>
+        <select id="examples" aria-label="Choose an example program"></select>
+        <button id="run" type="button" title="Run (Ctrl or Cmd + Enter)">Run <kbd>Ctrl+Enter</kbd></button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="pane" aria-labelledby="editor-title">
+        <h2 id="editor-title">Code</h2>
+        <div class="editor">
+          <pre id="gutter" class="gutter" aria-hidden="true">1</pre>
+          <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Curio source code"></textarea>
+        </div>
+      </section>
+
+      <div class="results">
+        <section class="pane" aria-labelledby="output-title">
+          <h2 id="output-title">Output</h2>
+          <pre id="output" class="panel" aria-live="polite"></pre>
+        </section>
+        <section class="pane" aria-labelledby="errors-title">
+          <h2 id="errors-title">Errors</h2>
+          <pre id="errors" class="panel errors" aria-live="polite"></pre>
+        </section>
+      </div>
+    </main>
+
+    <script type="module" src="/src/playground.ts"></script>
+  </body>
+</html>

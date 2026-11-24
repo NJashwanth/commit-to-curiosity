@@ -143,7 +143,9 @@ describe("lexer: strings", () => {
   it("reports an unterminated string at its opening quote (end of input)", () => {
     const r = lex('let s = "oops');
     expect(r.errors).toHaveLength(1);
-    expect(r.errors[0]).toMatchObject({ message: "Unterminated string", line: 1, col: 9, atEof: true });
+    // Strings cannot span lines, so this is a real error, not "needs more input" for the REPL.
+    expect(r.errors[0]).toMatchObject({ message: "Unterminated string", line: 1, col: 9 });
+    expect(r.errors[0]!.atEof).toBeUndefined();
     expect(r.tokens.map((t) => t.type)).toEqual([T.Let, T.Ident, T.Eq, T.Error, T.EOF]);
   });
 
@@ -206,13 +208,17 @@ describe("lexer: interpolation", () => {
       message: "Unterminated string interpolation, expected '}'",
       line: 1,
       col: 4,
-      atEof: true,
     });
     expect(r.tokens.map((t) => t.type)).toEqual([T.Error, T.EOF]);
   });
 });
 
 describe("lexer: comments, whitespace and positions", () => {
+  it("can start numbering at a later line (used by the REPL)", () => {
+    const toks = lex("a\nb", 10).tokens;
+    expect(toks.map((t) => t.line)).toEqual([10, 11, 11]);
+  });
+
   it("skips line and block comments", () => {
     expect(types("1 // comment\n2 /* block\n over lines */ 3")).toEqual([T.Number, T.Number, T.Number, T.EOF]);
     expect(types("// only a comment")).toEqual([T.EOF]);

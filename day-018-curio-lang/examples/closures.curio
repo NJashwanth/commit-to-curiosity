@@ -1,0 +1,26 @@
+// A closure remembers the variables around the place it was created.
+let makeCounter = fn() {
+  let count = 0;
+  return fn() { count = count + 1; return count; };
+};
+
+let next = makeCounter();
+next(); next();
+print("count is ${next()}");
+
+// Each counter has its own private state.
+let a = makeCounter();
+let b = makeCounter();
+a(); a();
+print("a = ${a()}, b = ${b()}");
+
+// Closures can be built by other functions.
+let adder = fn(n) { return fn(x) { return x + n; }; };
+let add5 = adder(5);
+let add100 = adder(100);
+print(add5(1), add100(1));
+
+// Higher-order functions with anonymous functions.
+let nums = [1, 2, 3, 4, 5];
+print(filter(map(nums, fn(x) { x * x; }), fn(x) { x > 5; }));
+print(reduce(nums, fn(sum, x) { sum + x; }, 0));

@@ -41,17 +41,23 @@ const isDigit = (c: string) => c >= "0" && c <= "9";
 const isAlpha = (c: string) => (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c === "_";
 const isAlnum = (c: string) => isAlpha(c) || isDigit(c);
 
-export function lex(source: string): LexResult {
-  return new Lexer(source).run();
+/** Lex source text. `startLine` lets the REPL keep line numbers growing across inputs. */
+export function lex(source: string, startLine = 1): LexResult {
+  return new Lexer(source, startLine).run();
 }
 
 class Lexer {
   private pos = 0;
-  private line = 1;
+  private line: number;
   private col = 1;
   private readonly errors: Diagnostic[] = [];
 
-  constructor(private readonly src: string) {}
+  constructor(
+    private readonly src: string,
+    startLine: number,
+  ) {
+    this.line = startLine;
+  }
 
   run(): LexResult {
     const tokens: Token[] = [];
@@ -197,7 +203,7 @@ class Lexer {
 
     for (;;) {
       if (this.atEnd() || this.peek() === "\n") {
-        this.error("Unterminated string", line, col, this.pos - start, this.atEnd());
+        this.error("Unterminated string", line, col, this.pos - start);
         return this.make(T.Error, this.src.slice(start, this.pos), line, col);
       }
       const c = this.peek();
@@ -248,7 +254,7 @@ class Lexer {
     for (;;) {
       const tok = this.next();
       if (tok.type === T.EOF) {
-        this.error("Unterminated string interpolation, expected '}'", line, col, 2, true);
+        this.error("Unterminated string interpolation, expected '}'", line, col, 2);
         return null;
       }
       if (tok.type === T.LBrace) depth++;
