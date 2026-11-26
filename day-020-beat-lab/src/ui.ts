@@ -257,7 +257,7 @@ export class UI {
         b.addEventListener("click", () => this.seq.setSynthParam("wave", i));
         waves.append(b);
       });
-      wrap.append(el("div", { class: "knob" }, el("span", { text: "Wave" }), waves));
+      wrap.append(el("div", { class: "knob wide" }, el("span", { text: "Wave" }), waves));
       for (const spec of SYNTH_KNOBS) wrap.append(this.knob(`track.${spec.key}`, spec, (v) => this.seq.setSynthParam(spec.key, v)));
       wrap.append(el("p", { class: "hint", text: "Drag a synth step up or down to change its note. Scroll over it works too." }));
     } else {
@@ -436,7 +436,7 @@ export class UI {
         c.classList.toggle("on", st.on);
         c.classList.toggle("accent", st.on && st.accent);
         c.classList.toggle("beat", i % 4 === 0);
-        c.classList.toggle("play", i === this.playStep);
+        c.classList.toggle("now", i === this.playStep);
         c.style.setProperty("--v", st.on ? String(0.3 + (st.vel / 16) * 0.7) : "0");
         c.setAttribute("aria-pressed", String(st.on));
         c.textContent = t === SYNTH_TRACK && st.on ? midiToName(pat.synth[i].note) : "";
@@ -467,8 +467,8 @@ export class UI {
     while (this.queue.length && this.queue[0].time <= now) hit = this.queue.shift()!;
     if (hit && (hit.step !== this.playStep || hit.pattern !== this.playSlot)) {
       this.cells.forEach((line) => {
-        if (this.playStep >= 0) line[this.playStep].classList.remove("play");
-        line[hit!.step].classList.add("play");
+        if (this.playStep >= 0) line[this.playStep].classList.remove("now");
+        line[hit!.step].classList.add("now");
       });
       this.playStep = hit.step;
       if (hit.pattern !== this.playSlot) {
@@ -477,7 +477,7 @@ export class UI {
       }
     }
     if (!this.app.playing && this.playStep >= 0) {
-      this.cells.forEach((line) => line[this.playStep]?.classList.remove("play"));
+      this.cells.forEach((line) => line[this.playStep]?.classList.remove("now"));
       this.playStep = -1;
       this.playSlot = -1;
       this.queue = [];
