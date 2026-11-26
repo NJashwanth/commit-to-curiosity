@@ -1,0 +1,26 @@
+:root {
+  --bg: #0f1117;
+  --panel: #171a23;
+  --line: #262b3a;
+  --text: #e8ebf4;
+  --muted: #8a93a8;
+  --accent: #ff6b3d;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.4 system-ui, sans-serif;
+}
+#app { max-width: 960px; margin: 0 auto; padding: 16px; }
+button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
