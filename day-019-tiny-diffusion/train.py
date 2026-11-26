@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import copy
 import csv
 from dataclasses import asdict, dataclass
@@ -10,9 +11,9 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
-from datasets import make_dataset
+from datasets import DATASETS, make_dataset
 from model import Denoiser
-from schedule import Schedule, make_schedule
+from schedule import SCHEDULES, Schedule, make_schedule
 
 ROOT = Path(__file__).resolve().parent
 
@@ -124,3 +125,41 @@ def train(
     if log_dir is not None:
         write_log(Path(log_dir) / f"{cfg.dataset}_loss.csv", losses)
     return ema_model, losses
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    d = Config()
+    p = argparse.ArgumentParser(description="Train a DDPM denoiser on a 2D dataset.")
+    p.add_argument("--dataset", choices=DATASETS, default=d.dataset)
+    p.add_argument("--steps", type=int, default=d.steps)
+    p.add_argument("--T", type=int, default=d.T, help="number of diffusion steps")
+    p.add_argument("--schedule", choices=SCHEDULES, default=d.schedule)
+    p.add_argument("--hidden", type=int, default=d.hidden)
+    p.add_argument("--n-layers", type=int, default=d.n_layers)
+    p.add_argument("--no-learned-input", action="store_true", help="concatenate x with the time embedding")
+    p.add_argument("--batch-size", type=int, default=d.batch_size)
+    p.add_argument("--lr", type=float, default=d.lr)
+    p.add_argument("--ema-decay", type=float, default=d.ema_decay)
+    p.add_argument("--n-data", type=int, default=d.n_data)
+    p.add_argument("--seed", type=int, default=d.seed)
+    p.add_argument("--ckpt-dir", type=Path, default=ROOT / "checkpoints")
+    p.add_argument("--log-dir", type=Path, default=ROOT / "runs")
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+    cfg = Config(
+        dataset=args.dataset, steps=args.steps, T=args.T, schedule=args.schedule,
+        hidden=args.hidden, n_layers=args.n_layers, learned_input=not args.no_learned_input,
+        batch_size=args.batch_size, lr=args.lr, ema_decay=args.ema_decay,
+        n_data=args.n_data, seed=args.seed,
+    )
+    _, losses = train(cfg, ckpt_dir=args.ckpt_dir, log_dir=args.log_dir, verbose=True)
+    print(f"done: final loss {sum(losses[-100:]) / len(losses[-100:]):.4f}")
+    print(f"checkpoint: {args.ckpt_dir / (cfg.dataset + '.pt')}")
+    print(f"loss log:   {args.log_dir / (cfg.dataset + '_loss.csv')}")
+
+
+if __name__ == "__main__":
+    main()

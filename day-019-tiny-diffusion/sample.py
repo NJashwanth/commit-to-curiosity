@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import argparse
+import time
+from pathlib import Path
+
 import numpy as np
 import torch
 
+from datasets import DATASETS, make_dataset
+from metrics import evaluate
 from schedule import Schedule
+from train import ROOT, load_checkpoint
 
 CLIP = 5.0  # predicted x_0 is clamped to [-CLIP, CLIP]; data lives within about +-3
 
@@ -91,3 +98,65 @@ def ddim_sample(
         if traj is not None:
             traj.append(x.clone())
     return (x, traj) if return_trajectory else x
+
+
+def run_sampler(model, schedule: Schedule, sampler: str, n: int, steps: int, seed: int, trajectory: bool = False):
+    if sampler == "ddpm":
+        return ddpm_sample(model, schedule, n, seed=seed, return_trajectory=trajectory)
+    return ddim_sample(model, schedule, n, steps=steps, seed=seed, return_trajectory=trajectory)
+
+
+def _format_metrics(label: str, res: dict[str, float], seconds: float | None = None) -> str:
+    took = f"  ({seconds:.2f}s)" if seconds is not None else ""
+    return f"{label:<22} chamfer {res['chamfer']:.4f}   mmd {res['mmd']:.5f}{took}"
+
+
+def main(argv: list[str] | None = None) -> None:
+    p = argparse.ArgumentParser(description="Sample from a trained model and score the result.")
+    p.add_argument("--dataset", choices=DATASETS, default="jn")
+    p.add_argument("--n", type=int, default=2000, help="number of points to generate")
+    p.add_argument("--sampler", choices=("ddpm", "ddim"), default="ddim")
+    p.add_argument("--sampling-steps", type=int, default=50, help="DDIM steps (DDPM always uses all T)")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--ckpt", type=Path, default=None, help="default: checkpoints/<dataset>.pt")
+    p.add_argument("--gif", type=Path, default=None, help="save the reverse-process GIF here")
+    p.add_argument("--plot", type=Path, default=None, help="save a real vs generated plot here")
+    p.add_argument("--compare", action="store_true", help="score DDPM and DDIM side by side")
+    args = p.parse_args(argv)
+
+    model, schedule, _ = load_checkpoint(args.ckpt or ROOT / "checkpoints" / f"{args.dataset}.pt")
+    steps = min(args.sampling_steps, schedule.T)
+    metric_seed = 123  # fixed so every sampler is scored against the same real reference
+
+    if args.compare:
+        runs = {f"DDPM ({schedule.T} steps)": ("ddpm", schedule.T), f"DDIM ({steps} steps)": ("ddim", steps)}
+    else:
+        label = f"DDPM ({schedule.T} steps)" if args.sampler == "ddpm" else f"DDIM ({steps} steps)"
+        runs = {label: (args.sampler, steps)}
+
+    generated = None
+    for label, (sampler, k) in runs.items():
+        start = time.perf_counter()
+        x = run_sampler(model, schedule, sampler, args.n, k, args.seed)
+        res = evaluate(args.dataset, x, seed=metric_seed)
+        print(_format_metrics(label, res, time.perf_counter() - start))
+        generated = x if generated is None or sampler == args.sampler else generated
+    print(_format_metrics("real vs real (floor)", {"chamfer": res["real_chamfer"], "mmd": res["real_mmd"]}))
+    print(_format_metrics("gaussian baseline", {"chamfer": res["gaussian_chamfer"], "mmd": res["gaussian_mmd"]}))
+
+    from viz import plot_real_vs_generated, save_reverse_gif
+
+    if args.plot:
+        real = make_dataset(args.dataset, args.n, seed=metric_seed)
+        plot_real_vs_generated({args.dataset: (real, generated)}, args.plot)
+        print(f"saved {args.plot}")
+    if args.gif:
+        _, traj = run_sampler(model, schedule, args.sampler, min(args.n, 1000), steps, args.seed, trajectory=True)
+        reference = make_dataset(args.dataset, 1000, seed=metric_seed)
+        title = f"{args.dataset} ({args.sampler.upper()})"
+        save_reverse_gif(traj, args.gif, title=title, reference=reference)
+        print(f"saved {args.gif} ({args.gif.stat().st_size / 1024:.0f} KB)")
+
+
+if __name__ == "__main__":
+    main()
