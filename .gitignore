@@ -83,3 +83,8 @@ day-005-receipt-splitter/evals/receipts/
 day-007-tiny-gpt/data/
 day-007-tiny-gpt/checkpoints/
 *.pt
+
+# --- day-019 tiny-diffusion: checkpoints and CSV logs ---
+day-019-tiny-diffusion/checkpoints/
+day-019-tiny-diffusion/runs/
+day-019-tiny-diffusion/*.csv
