@@ -222,3 +222,20 @@ export class MockContext {
 
 export const asCtx = (m: MockContext) => m as unknown as BaseAudioContext;
 export const asNode = (m: MockNode) => m as unknown as AudioNode;
+
+/** A manual timer: nothing runs until the test calls fire(). */
+export class FakeTimer {
+  pending: Array<{ fn: () => void; ms: number; id: number }> = [];
+  private next = 1;
+  set(fn: () => void, ms: number) {
+    const id = this.next++;
+    this.pending.push({ fn, ms, id });
+    return id;
+  }
+  clear(h: unknown) {
+    this.pending = this.pending.filter((p) => p.id !== h);
+  }
+  fire() {
+    this.pending.shift()?.fn();
+  }
+}

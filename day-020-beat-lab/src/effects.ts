@@ -101,6 +101,8 @@ export class Effects {
     this.analyser = ctx.createAnalyser();
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.8;
+    this.analyser.minDecibels = -85;
+    this.analyser.maxDecibels = -15;
 
     const delaySend = ctx.createGain();
     this.delay = ctx.createDelay(4);

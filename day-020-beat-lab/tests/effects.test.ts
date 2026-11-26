@@ -138,6 +138,7 @@ describe("Effects graph", () => {
     expect(reaches(e.input, comp)).toBe(true);
     expect(reaches(comp, e.analyser)).toBe(true);
     expect((e.analyser as unknown as MockAnalyser).fftSize).toBe(2048);
+    expect((e.analyser as unknown as MockAnalyser).maxDecibels).toBeGreaterThan((e.analyser as unknown as MockAnalyser).minDecibels);
     expect(ctx.destination.connections).toEqual([]);
   });
 
