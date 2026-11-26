@@ -106,3 +106,13 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
   .name { font-size: 12px; padding: 4px 6px; }
   .knob { grid-template-columns: 84px 1fr 58px; }
 }
+input[type="text"] {
+  background: var(--panel2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font: inherit;
+  min-height: 34px;
+  width: 110px;
+}

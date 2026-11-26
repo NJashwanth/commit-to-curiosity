@@ -1,27 +1,22 @@
 import "./style.css";
 import { AudioApp } from "./engine";
+import { loadPreset } from "./presets";
 import { Sequencer } from "./sequencer";
-import { createDefaultState, type BeatState } from "./state";
+import { BeatStore, chooseInitial } from "./storage";
+import { mountTools } from "./tools";
 import { UI } from "./ui";
 
-/** A small four-on-the-floor starter so the first Play makes noise. Presets replace this. */
-function starterBeat(): BeatState {
-  const s = createDefaultState();
-  const p = s.patterns[0];
-  const on = (row: { on: boolean }[], steps: number[]) => steps.forEach((i) => (row[i].on = true));
-  on(p.drums[0], [0, 4, 8, 12]);
-  on(p.drums[1], [4, 12]);
-  on(p.drums[2], [0, 2, 4, 6, 8, 10, 12, 14]);
-  on(p.drums[3], [6, 14]);
-  [0, 3, 6, 8, 11].forEach((i, n) => Object.assign(p.synth[i], { on: true, note: [36, 36, 39, 41, 43][n] }));
-  s.tempo = 110;
-  return s;
-}
+const store = new BeatStore();
+const initial = chooseInitial(location.hash, store, () => loadPreset("commit-to-curiosity")!);
 
-const seq = new Sequencer(starterBeat());
+const seq = new Sequencer(initial.state);
 const app = new AudioApp(seq);
-const root = document.querySelector<HTMLElement>("#app")!;
-new UI(root, app);
+const ui = new UI(document.querySelector<HTMLElement>("#app")!, app);
+mountTools(ui, app, store);
+
+if (initial.error) ui.setStatus(`${initial.error} Starting with ${initial.source === "autosave" ? "your last beat" : "the default beat"} instead.`);
+else if (initial.source === "link") ui.setStatus("Loaded the beat from the link. Press Play or hit space.");
+if (!store.persistent) ui.setStatus("This browser blocks storage, so saves last only for this visit. Share links still work.");
 
 // Handy for poking at from the console and for the screenshot script.
-(window as unknown as { beatlab: unknown }).beatlab = { seq, app };
+(window as unknown as { beatlab: unknown }).beatlab = { seq, app, store };
