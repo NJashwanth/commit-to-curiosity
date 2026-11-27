@@ -3,9 +3,11 @@
     python export.py --out ../web/public/model.json
 
 The JSON holds the architecture (a list of layers) and the weights as flat row-major lists,
-rounded to 6 significant digits (float32 carries about 7, so the rounding error is far below
-what a float32 forward pass produces anyway). After writing, the file is read back and a
-pure NumPy forward pass over it is compared with PyTorch on real images.
+rounded to 7 significant digits (float32 carries about 7.2, so the rounding error is at most
+float32's own resolution). After writing, the file is read back and a
+pure NumPy forward pass over it is compared with PyTorch on real images. Finally the parity
+fixtures for the TypeScript tests are regenerated from the same checkpoint (see fixtures.py),
+so model.json and the fixtures can never drift apart.
 """
 from __future__ import annotations
 
@@ -18,10 +20,11 @@ import torch
 
 import dataset as ds
 import evaluate as ev
+import fixtures
 import reference
 from model import DigitCNN, count_params
 
-SIG_DIGITS = 6
+SIG_DIGITS = 7
 MAX_BYTES = 1_000_000
 TOLERANCE = 1e-5
 
@@ -101,7 +104,7 @@ def meta_from_metrics(metrics: dict) -> dict:
     }
 
 
-def run(ckpt: Path, out: Path, data_dir: str, verify_images: int, log=print) -> dict:
+def run(ckpt: Path, out: Path, data_dir: str, verify_images: int, log=print, fixtures_dir: Path | None = None) -> dict:
     model, metrics = load_checkpoint(ckpt)
     spec = export_model(model, meta_from_metrics(metrics))
     size = write_json(spec, out)
@@ -118,6 +121,9 @@ def run(ckpt: Path, out: Path, data_dir: str, verify_images: int, log=print) -> 
         f"predictions identical: {result['predictions_match']}")
     if result["max_abs_diff"] > TOLERANCE or not result["predictions_match"]:
         raise SystemExit(f"export verification failed (tolerance {TOLERANCE})")
+    if fixtures_dir is not None:
+        written = fixtures.write_fixtures(fixtures_dir, model, data.x_test, data.y_test, out)
+        log(f"wrote parity fixtures to {fixtures_dir} ({written['ops']} op cases, {written['images']} images)")
     return {"bytes": size, **result}
 
 
@@ -127,8 +133,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--out", type=Path, default=Path("../web/public/model.json"))
     p.add_argument("--data-dir", default="data")
     p.add_argument("--verify-images", type=int, default=500)
+    p.add_argument("--fixtures-dir", type=Path, default=fixtures.DEFAULT_DIR,
+                   help="where to write the TypeScript parity fixtures (default: web/tests/fixtures)")
+    p.add_argument("--no-fixtures", action="store_true", help="only write model.json")
     args = p.parse_args(argv)
-    run(args.ckpt, args.out, args.data_dir, args.verify_images)
+    run(args.ckpt, args.out, args.data_dir, args.verify_images, fixtures_dir=None if args.no_fixtures else args.fixtures_dir)
 
 
 if __name__ == "__main__":

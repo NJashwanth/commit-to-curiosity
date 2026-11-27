@@ -40,13 +40,13 @@ def test_json_has_the_architecture_and_compact_float_lists(model, tmp_path):
     assert size < ex.MAX_BYTES
 
 
-def test_floats_are_rounded_to_six_significant_digits(model):
+def test_floats_are_rounded_to_seven_significant_digits(model):
     spec = ex.export_model(model)
     exact = model.fc1.weight.detach().numpy().ravel()
     rounded = np.array(next(l for l in spec["layers"] if l["type"] == "dense")["weight"])
     assert not np.array_equal(rounded, exact)
-    assert np.all(np.abs(rounded - exact) <= np.abs(exact) * 5.1e-6 + 1e-30)
-    assert all(len(f"{v:.6g}".replace("-", "").replace(".", "").lstrip("0")) <= 12 for v in rounded[:50])
+    assert np.all(np.abs(rounded - exact) <= np.abs(exact) * 5.1e-7 + 1e-30)
+    assert all(len(f"{v:.7g}".replace("-", "").replace(".", "").lstrip("0")) <= 13 for v in rounded[:50])
 
 
 def test_round_trip_through_a_file_preserves_the_weights(model, tmp_path):
@@ -88,8 +88,13 @@ def test_cli_entry_point(tmp_path, capsys):
     tr.main(["--source", "synthetic", "--epochs", "1", "--synthetic-train", "200", "--synthetic-test", "60",
              "--out-dir", str(run_dir), "--data-dir", str(tmp_path)])
     ex.main(["--ckpt", str(run_dir / "model.pt"), "--out", str(tmp_path / "m.json"), "--data-dir", str(tmp_path),
-             "--verify-images", "20"])
+             "--verify-images", "20",
+             "--fixtures-dir", str(tmp_path / "fx")])
     assert "verified on 20 test images" in capsys.readouterr().out
+    assert (tmp_path / "fx" / "ops.json").exists() and (tmp_path / "fx" / "forward.json").exists()
+    ex.main(["--ckpt", str(run_dir / "model.pt"), "--out", str(tmp_path / "m2.json"), "--data-dir", str(tmp_path),
+             "--verify-images", "10", "--no-fixtures"])
+    assert "parity fixtures" not in capsys.readouterr().out
 
 
 def test_a_failed_verification_raises(tmp_path, monkeypatch):
