@@ -81,3 +81,5 @@ def test_extreme_mass_offset_never_pushes_the_digit_out_of_the_field():
 
 def test_round_half_up_matches_javascript_math_round():
     assert [pp._round_half_up(v) for v in (0.5, 1.5, 2.5, -0.5, -1.5, 2.4)] == [1, 2, 3, 0, -1, 2]
+    assert pp._round_half_up(10.5 - 1e-13) == 11  # a tie nudged below .5 by float noise still rounds up
+    assert pp._round_half_up(10.4999) == 10

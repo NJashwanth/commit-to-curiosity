@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>digit-sketch</title>
+    <meta name="description" content="Draw a digit and watch a small CNN, running as plain TypeScript in your browser, recognize it." />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>digit-sketch</h1>
+        <p>
+          Draw a digit from 0 to 9. A small convolutional network trained in PyTorch runs here as plain TypeScript, with no ML
+          library, and guesses as you draw.
+        </p>
+      </header>
+
+      <main>
+        <section class="card draw" aria-labelledby="h-draw">
+          <h2 id="h-draw">Draw</h2>
+          <div class="pad-wrap">
+            <canvas id="pad" width="280" height="280" aria-label="Drawing canvas. Draw a digit with a mouse or finger."></canvas>
+            <span id="pad-hint" class="pad-hint">Draw here</span>
+          </div>
+          <div class="controls">
+            <label for="brush">Brush</label>
+            <input id="brush" type="range" min="6" max="40" step="1" value="18" />
+            <output id="brush-value" for="brush">18</output>
+            <button id="clear" type="button">Clear</button>
+          </div>
+        </section>
+
+        <section class="card sees" aria-labelledby="h-sees">
+          <h2 id="h-sees">What the model sees</h2>
+          <canvas id="input28" width="28" height="28" aria-label="The 28 by 28 image the model receives"></canvas>
+          <p class="caption">Cropped to your ink, scaled to fit 20&times;20, then centered by center of mass in 28&times;28, like MNIST.</p>
+        </section>
+
+        <section class="card predict" aria-labelledby="h-predict">
+          <h2 id="h-predict">Prediction</h2>
+          <div id="headline" class="headline" aria-live="polite">Loading model...</div>
+          <ol id="bars" class="bars" aria-label="Probability of each digit"></ol>
+        </section>
+
+        <section class="card maps" aria-labelledby="h-maps">
+          <h2 id="h-maps">Feature maps</h2>
+          <p class="caption">
+            Each tile is one filter's response after ReLU. Bright means the pattern that filter looks for is there. Each layer is
+            scaled by its own brightest value.
+          </p>
+          <div class="map-groups">
+            <div>
+              <h3 id="maps1-title">Layer 1</h3>
+              <div id="maps1" class="map-grid cols-8"></div>
+            </div>
+            <div>
+              <h3 id="maps2-title">Layer 2</h3>
+              <div id="maps2" class="map-grid cols-8"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer id="model-info"></footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

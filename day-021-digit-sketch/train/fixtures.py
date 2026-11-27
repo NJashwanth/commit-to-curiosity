@@ -2,9 +2,10 @@
 
     python fixtures.py            (export.py also runs this after writing model.json)
 
-Writes two files into web/tests/fixtures/:
-  ops.json      small seeded inputs for every operation, with the output PyTorch computes
-  forward.json  20 real test images (two per digit) with PyTorch's probabilities, plus a fingerprint of
+Writes three files into web/tests/fixtures/:
+  ops.json         small seeded inputs for every operation, with the output PyTorch computes
+  preprocess.json  drawings (as 0..255 canvases) with the 28x28 image train/preprocess.py makes from each
+  forward.json     20 real test images (two per digit) with PyTorch's probabilities, plus a fingerprint of
                 the model.json they were made for, so stale fixtures are caught by a test
 """
 from __future__ import annotations
@@ -20,6 +21,8 @@ import torch.nn.functional as F
 
 import dataset as ds
 import evaluate as ev
+import preprocess as pp
+import synthetic
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 DEFAULT_DIR = WEB / "tests" / "fixtures"
@@ -69,6 +72,54 @@ def make_op_fixtures(seed: int = 0) -> dict:
     return fx
 
 
+def _canvas(img01: np.ndarray) -> np.ndarray:
+    return np.clip(np.round(img01 * 255.0), 0, 255).astype(np.uint8)
+
+
+def make_preprocess_fixtures() -> dict:
+    """Drawings of different sizes and shapes, quantised to bytes like a canvas, with the Python recipe's output."""
+    from PIL import Image
+
+    def digit(d: int, size: int, off: tuple[int, int] = (0, 0), canvas: tuple[int, int] | None = None) -> np.ndarray:
+        img = Image.fromarray(_canvas(synthetic.render_digit(None, d))).resize((size, size), Image.BILINEAR)
+        arr = np.asarray(img)
+        if canvas is None:
+            return arr
+        out = np.zeros((canvas[1], canvas[0]), dtype=np.uint8)
+        out[off[1] : off[1] + size, off[0] : off[0] + size] = arr
+        return out
+
+    l_shape = np.zeros((50, 80), dtype=np.uint8)
+    l_shape[5:45, 10:22] = 255
+    l_shape[33:45, 10:70] = 255
+    faint_bar = np.zeros((48, 48), dtype=np.uint8)
+    faint_bar[4:44, 22:25] = 100
+    dot = np.zeros((40, 40), dtype=np.uint8)
+    dot[17, 25] = 255
+    diagonal = np.zeros((60, 60), dtype=np.uint8)
+    for i in range(10, 50):
+        diagonal[i, i - 2 : i + 2] = 255
+    canvases = [
+        ("a 3 filling a 64x64 canvas", digit(3, 64)),
+        ("a 7 filling a 64x64 canvas", digit(7, 64)),
+        ("a small 5 off to one side of a wide canvas", digit(5, 30, off=(55, 8), canvas=(100, 48))),
+        ("an L shape: mass far from the bounding box center", l_shape),
+        ("a faint thin vertical bar", faint_bar),
+        ("a single pixel", dot),
+        ("a diagonal stroke", diagonal),
+        ("an empty canvas", np.zeros((32, 32), dtype=np.uint8)),
+    ]
+    cases = []
+    for name, arr in canvases:
+        expected = pp.mnist_style(arr.astype(np.float64) / 255.0)
+        cases.append({
+            "name": name, "width": int(arr.shape[1]), "height": int(arr.shape[0]),
+            "pixels": arr.ravel().tolist(), "empty": bool(expected.max() == 0),
+            "expected": [float(f"{v:.9g}") for v in expected.ravel()],
+        })
+    return {"cases": cases}
+
+
 def fingerprint(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:16]
 
@@ -103,6 +154,7 @@ def write_fixtures(out_dir: Path, model, x01: np.ndarray, y: np.ndarray, model_j
     ops, fwd = make_op_fixtures(), make_forward_fixtures(model, x01, y, model_json)
     (out_dir / "ops.json").write_text(json.dumps(ops, separators=(",", ":")))
     (out_dir / "forward.json").write_text(json.dumps(fwd, separators=(",", ":")))
+    (out_dir / "preprocess.json").write_text(json.dumps(make_preprocess_fixtures(), separators=(",", ":")))
     return {"ops": len(sum(ops.values(), [])), "images": len(fwd["labels"])}
 
 

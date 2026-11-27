@@ -9,7 +9,8 @@ Conventions shared with the TypeScript version:
   * a pixel counts as ink for the bounding box when it is above INK_THRESHOLD
   * resizing is exact area averaging
   * the scaled digit is divided by its maximum, so thin strokes do not come out faint
-  * the offset is floor(x + 0.5), because round-half-even differs between languages
+  * the offset is floor(x + 0.5 + 1e-9): round-half-even differs between languages, and the
+    epsilon makes exact ties immune to summation-order noise
 """
 from __future__ import annotations
 
@@ -23,8 +24,13 @@ CENTER = SIZE / 2  # target center of mass, in continuous pixel coordinates
 INK_THRESHOLD = 0.1
 
 
+TIE_EPSILON = 1e-9
+
+
 def _round_half_up(x: float) -> int:
-    return int(math.floor(x + 0.5))
+    """floor(x + 0.5), nudged by 1e-9 so an exact tie that floating point noise puts a hair below .5
+    (symmetric drawings produce these) still rounds up, the same way in Python and TypeScript."""
+    return int(math.floor(x + 0.5 + TIE_EPSILON))
 
 
 def area_weights(src: int, dst: int) -> np.ndarray:

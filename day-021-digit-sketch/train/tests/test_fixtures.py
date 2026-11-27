@@ -60,6 +60,23 @@ def test_forward_fixtures_hold_quantised_images_and_torch_probabilities(tmp_path
     assert fx.fingerprint(path) != out["model_fingerprint"]
 
 
+def test_preprocess_fixtures_cover_the_awkward_cases():
+    fixture = fx.make_preprocess_fixtures()
+    cases = fixture["cases"]
+    assert fixture == fx.make_preprocess_fixtures()  # deterministic
+    assert len(cases) >= 6
+    for c in cases:
+        assert len(c["pixels"]) == c["width"] * c["height"]
+        assert len(c["expected"]) == 784
+        assert max(c["pixels"]) <= 255 and max(c["expected"]) <= 1.0
+    assert [c["empty"] for c in cases].count(True) == 1
+    empty = next(c for c in cases if c["empty"])
+    assert max(empty["expected"]) == 0.0
+    assert len({(c["width"], c["height"]) for c in cases}) >= 4  # different canvas sizes and aspect ratios
+    nonempty = [c for c in cases if not c["empty"]]
+    assert all(max(c["expected"]) == pytest.approx(1.0) for c in nonempty)
+
+
 def test_write_fixtures_and_the_cli(tmp_path, capsys):
     import train as tr
     tr.main(["--source", "synthetic", "--epochs", "1", "--synthetic-train", "300", "--synthetic-test", "100",
@@ -70,3 +87,4 @@ def test_write_fixtures_and_the_cli(tmp_path, capsys):
     assert "21 ops" not in capsys.readouterr().out
     assert json.loads((tmp_path / "fixtures" / "forward.json").read_text())["mean"] == 0.1307
     assert (tmp_path / "fixtures" / "ops.json").stat().st_size > 1000
+    assert len(json.loads((tmp_path / "fixtures" / "preprocess.json").read_text())["cases"]) >= 6
