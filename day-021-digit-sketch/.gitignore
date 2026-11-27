@@ -1,0 +1,11 @@
+# Datasets, checkpoints and run output are never committed
+train/data/
+train/runs/
+train/.venv/
+*.pt
+*.npz
+
+# Web
+web/node_modules/
+web/dist/
+web/coverage/
